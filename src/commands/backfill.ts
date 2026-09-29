@@ -7,7 +7,7 @@ import { buildStory, listStories, writeStory } from '../core/story.js';
  *
  * The point is that the dashboard is worth opening in the first minute, before
  * you have run a single prompt through it. A commit is a coarser unit than a
- * prompt — several prompts often end up in one commit — so these are marked
+ * prompt (several prompts often end up in one commit), so these are marked
  * `source: "commit"` and the UI says where they came from.
  */
 export async function backfillFromGit(root: string, limit = 15): Promise<number> {

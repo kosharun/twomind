@@ -96,7 +96,7 @@ export async function hookPrompt(agent: string): Promise<void> {
 
     root = await resolveRoot(payload);
     if (!root) {
-      debugLog(null, '[prompt] project is not set up for twomind — skipping');
+      debugLog(null, '[prompt] project is not set up for twomind, skipping');
       return;
     }
 
@@ -139,7 +139,7 @@ export async function hookStop(agent: string): Promise<void> {
     const sessionId = payloadSession(payload);
     const file = pendingFile(root, sessionId);
     if (!existsSync(file)) {
-      debugLog(root, '[stop] no snapshot from the prompt hook — nothing to compare');
+      debugLog(root, '[stop] no snapshot from the prompt hook, nothing to compare');
       return;
     }
 
@@ -155,7 +155,7 @@ export async function hookStop(agent: string): Promise<void> {
     const { snapshots } = resolveProjectPaths(root);
     const after = await takeSnapshot(root, snapshots);
     if (!after) {
-      debugLog(root, '[stop] could not snapshot — will try again at the next stop');
+      debugLog(root, '[stop] could not snapshot, will try again at the next stop');
       return;
     }
 
@@ -179,7 +179,7 @@ export async function hookStop(agent: string): Promise<void> {
     if (!note && !pending.askedForNote && payload.stop_hook_active !== true) {
       pending.askedForNote = true;
       writeFileSync(file, JSON.stringify(pending, null, 2), 'utf8');
-      debugLog(root, `[stop] ${diff.files.length} file(s) changed and no note yet — asking the agent to explain`);
+      debugLog(root, `[stop] ${diff.files.length} file(s) changed and no note yet, asking the agent to explain`);
       continueWith(agent, askForNoteMessage(root, diff.files));
       return;
     }

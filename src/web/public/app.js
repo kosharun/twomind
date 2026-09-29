@@ -113,7 +113,7 @@ function theme() {
     try {
       localStorage.setItem('twomind-theme', next);
     } catch {
-      /* private mode — the toggle still works for this session */
+      /* private mode: the toggle still works for this session */
     }
     sync();
   });

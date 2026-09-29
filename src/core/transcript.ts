@@ -4,7 +4,7 @@ import { openSync, readSync, closeSync, statSync, existsSync } from 'node:fs';
  * Reading what the agent already said.
  *
  * Every hook hands us a path to the session transcript. The agent's own closing
- * message is usually a decent summary of what it just did — so we take that for
+ * message is usually a decent summary of what it just did, so we take that for
  * free instead of spending tokens asking it to explain itself again.
  *
  * Claude Code and Codex write different JSONL shapes, and both change over time,
@@ -55,7 +55,7 @@ function extractText(content: unknown, depth = 0): string {
   if (content && typeof content === 'object') {
     const obj = content as Record<string, unknown>;
     const type = typeof obj.type === 'string' ? obj.type : '';
-    // Skip tool traffic and thinking — we want the message meant for the human.
+    // Skip tool traffic and thinking: we want the message meant for the human.
     if (type === 'tool_use' || type === 'tool_result' || type === 'thinking' || type === 'redacted_thinking') {
       return '';
     }

@@ -62,7 +62,7 @@ export async function doctor(cwd = process.cwd()): Promise<void> {
     name: 'git repository',
     ok: gitOk,
     detail: gitOk ? 'found' : 'not a git repository',
-    fix: 'Run "git init" — Twomind uses git to see exactly what each prompt changed.',
+    fix: 'Run "git init". Twomind uses git to see exactly what each prompt changed.',
   });
 
   const initialised = isInitialised(root);
@@ -107,7 +107,7 @@ export async function doctor(cwd = process.cwd()): Promise<void> {
     checks.push({
       name: 'hook paths',
       ok: safe,
-      detail: safe ? 'written with "/" — safe for Git Bash' : 'contain "\\" — Git Bash breaks these',
+      detail: safe ? 'written with "/", safe for Git Bash' : 'contain "\\", Git Bash breaks these',
       fix: 'Run "twomind refresh" to rewrite them.',
     });
   }

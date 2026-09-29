@@ -9,6 +9,11 @@ import { collapseContext, parseUnifiedDiff } from '../core/diffparse.js';
 import { listStories, loadStory, readLastSeen, writeLastSeen, type StoryMeta } from '../core/story.js';
 import { buildCodeMap, busiestFiles, findSymbol, searchSymbols, type CodeMap } from '../core/codemap.js';
 import { historyForFile } from '../core/maphistory.js';
+import { createFlowCache } from '../core/flow/cache.js';
+import { buildFlowGraph } from '../core/flow/graph.js';
+import { FLOW_EXTENSIONS } from '../core/flow/parse.js';
+import { flowStarts, searchFunctions } from '../core/flow/resolve.js';
+import { reliableChangedLines, storyStarts } from '../core/flow/stories.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(here, 'public');
@@ -38,6 +43,8 @@ interface StorySummary {
 
 function headlineFor(meta: StoryMeta): string {
   if (meta.explainedBy === 'none') return 'not explained by the agent';
+  const chapters = meta.chapters?.length ?? 0;
+  if (chapters) return `${chapters} chapter${chapters === 1 ? '' : 's'}`;
   return meta.groups.map((group) => `${group.files.length} ${group.category}`).join(' · ');
 }
 
@@ -60,6 +67,8 @@ function summarise(meta: StoryMeta, lastSeen: string | null): StorySummary {
 
 interface CatchUp {
   since: string | null;
+  /** Nothing has landed since you last looked, so this shows recent work instead. */
+  upToDate: boolean;
   storyCount: number;
   fileCount: number;
   added: number;
@@ -79,7 +88,10 @@ function firstSentence(text: string | undefined): string {
 
 function buildCatchUp(stories: Array<{ meta: StoryMeta }>, lastSeen: string | null): CatchUp {
   const since = lastSeen;
-  const fresh = since ? stories.filter((s) => s.meta.createdAt > since) : stories.slice(0, 10);
+  const newer = since ? stories.filter((s) => s.meta.createdAt > since) : stories.slice(0, 10);
+  // An empty page of zeros helps nobody. With nothing new, show recent work and say so.
+  const upToDate = newer.length === 0 && stories.length > 0;
+  const fresh = upToDate ? stories.slice(0, 5) : newer;
 
   const fileCounts = new Map<string, number>();
   let fileCount = 0;
@@ -113,6 +125,7 @@ function buildCatchUp(stories: Array<{ meta: StoryMeta }>, lastSeen: string | nu
 
   return {
     since,
+    upToDate,
     storyCount: fresh.length,
     fileCount,
     added,
@@ -152,7 +165,7 @@ export interface ServeOptions {
 
 /**
  * The code map is a full source scan, so it is built once on demand and then
- * reused. It is only structure — nothing in it goes stale in a way that misleads
+ * reused. It is only structure: nothing in it goes stale in a way that misleads
  * you, and `?refresh=1` rebuilds it after a big change.
  */
 function createMapCache(root: string) {
@@ -174,6 +187,7 @@ export async function serve(options: ServeOptions): Promise<void> {
   const paths = resolveProjectPaths(root);
   const clients = new Set<ServerResponse>();
   const codeMap = createMapCache(root);
+  const flows = createFlowCache(root);
 
   const broadcast = (event: string) => {
     for (const client of clients) {
@@ -203,6 +217,74 @@ export async function serve(options: ServeOptions): Promise<void> {
           catchUp: buildCatchUp(stories, lastSeen),
           stories: stories.map((s) => summarise(s.meta, lastSeen)),
         });
+        return;
+      }
+
+      // ---- flows: what a function calls, and when ----
+
+      if (route === '/api/flow') {
+        const project = flows.get(url.searchParams.get('refresh') === '1');
+        const stories = listStories(root);
+        // The functions the last few changes touched, so the map starts where the work was.
+        const recent = stories.slice(0, 5).flatMap(({ meta }) => {
+          const story = loadStory(root, meta.id);
+          if (!story) return [];
+          const changed = reliableChangedLines(meta, story.patch, stories);
+          const starts = storyStarts(project, meta, changed).whole.starts.slice(0, 4);
+          return starts.length ? [{ storyId: meta.id, title: meta.title, at: meta.createdAt, functions: starts }] : [];
+        });
+        sendJson(res, 200, {
+          builtAt: project.builtAt,
+          fileCount: project.files.size,
+          functionCount: project.functions.size,
+          unreadable: project.parseErrors.map((e) => e.file),
+          ...flowStarts(project),
+          recent,
+        });
+        return;
+      }
+
+      if (route === '/api/flow/search') {
+        sendJson(res, 200, { results: searchFunctions(flows.get(), url.searchParams.get('q') ?? '') });
+        return;
+      }
+
+      if (route === '/api/flow/graph') {
+        const project = flows.get();
+        const id = url.searchParams.get('id') ?? '';
+        const depth = Math.min(6, Math.max(1, Number(url.searchParams.get('depth')) || 3));
+        const storyId = url.searchParams.get('story');
+        const stories = listStories(root);
+
+        let changedLines: Map<string, Set<number>> | undefined;
+        if (storyId) {
+          const story = loadStory(root, storyId);
+          if (story) changedLines = reliableChangedLines(story.meta, story.patch, stories);
+        }
+
+        const graph = buildFlowGraph(project, id, { depth, changedLines });
+        if (!graph) {
+          sendJson(res, 404, { error: 'that function is not in the code any more' });
+          return;
+        }
+        // The only sentences in a flow: what agents wrote about each file.
+        const why: Record<string, string> = {};
+        for (const node of graph.nodes) {
+          if (node.file && !(node.file in why)) why[node.file] = historyForFile(stories, node.file).latestWhy;
+        }
+        sendJson(res, 200, { ...graph, why });
+        return;
+      }
+
+      if (route.startsWith('/api/story/') && route.endsWith('/flows')) {
+        const id = decodeURIComponent(route.slice('/api/story/'.length, -'/flows'.length));
+        const story = loadStory(root, id);
+        if (!story) {
+          sendJson(res, 404, { error: 'story not found' });
+          return;
+        }
+        const changed = reliableChangedLines(story.meta, story.patch, listStories(root));
+        sendJson(res, 200, storyStarts(flows.get(), story.meta, changed));
         return;
       }
 
@@ -240,8 +322,13 @@ export async function serve(options: ServeOptions): Promise<void> {
       }
 
       if (route === '/api/map/search') {
-        const map = codeMap.get();
-        sendJson(res, 200, { results: searchSymbols(map, url.searchParams.get('q') ?? '') });
+        // JS and TS functions are searched as flows. This covers the rest:
+        // other languages, and classes and types, which have no flow of their own.
+        const results = searchSymbols(codeMap.get(), url.searchParams.get('q') ?? '').filter(
+          (hit) =>
+            !FLOW_EXTENSIONS.has(path.extname(hit.file).toLowerCase()) || hit.kind === 'class' || hit.kind === 'type'
+        );
+        sendJson(res, 200, { results });
         return;
       }
 
@@ -342,13 +429,13 @@ export async function serve(options: ServeOptions): Promise<void> {
   console.log('');
   console.log(`  \u001b[1mtwomind\u001b[0m  ${address}`);
   console.log(`  \u001b[2m${root}\u001b[0m`);
-  console.log(`  \u001b[2mleave this running in a second window — it updates itself\u001b[0m`);
+  console.log(`  \u001b[2mleave this running in a second window, it updates itself\u001b[0m`);
   console.log('');
 
   if (options.open) {
     const { spawn } = await import('node:child_process');
     try {
-      // No shell:true on Windows — Node 24 deprecates that combination, and
+      // No shell:true on Windows: Node 24 deprecates that combination, and
       // "start" needs an explicit empty title argument when run via cmd /c.
       if (process.platform === 'win32') {
         spawn('cmd', ['/c', 'start', '""', address], { detached: true, stdio: 'ignore' }).unref();

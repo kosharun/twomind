@@ -5,7 +5,7 @@ import type { LoadedStory } from './story.js';
  *
  * A call graph tells you what calls what. It cannot tell you why any of it
  * exists. Twomind already has that answer, written by the agent at the moment
- * it made each change — so the map borrows its sentences from the stories
+ * it made each change, so the map borrows its sentences from the stories
  * instead of inventing new ones.
  *
  * Every sentence returned here was written by an agent about that exact file.
@@ -56,7 +56,7 @@ export function historyForFile(stories: LoadedStory[], file: string): FileHistor
   };
 }
 
-/** Files nobody has ever explained — the honest blind spots of the map. */
+/** Files nobody has ever explained: the honest blind spots of the map. */
 export function unexplainedFiles(stories: LoadedStory[], allFiles: string[]): string[] {
   const explained = new Set<string>();
   for (const { meta } of stories) {

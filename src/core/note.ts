@@ -7,9 +7,10 @@ import { safeJsonParse } from './util.js';
  * The agent's note: its own explanation of a change.
  *
  * Twomind never decides what matters in a change. The agent that made the change
- * writes this note — which files are the heart of it, which are small follow-ups,
- * and why each one changed — and Twomind attaches it to the real diff. A file the
- * agent leaves out is shown as "not explained", never guessed at.
+ * writes this note: which files are the heart of it, which are small follow-ups,
+ * why each one changed, and the story of the change told in a few chapters.
+ * Twomind attaches it to the real diff. A file the agent leaves out is shown as
+ * "not explained", never guessed at.
  *
  * The note lives in .twomind/.local/, which is gitignored and excluded from every
  * snapshot, so writing it can never show up as a code change itself.
@@ -23,10 +24,22 @@ export interface NoteFile {
   why: string;
 }
 
+/** One part of the story. A chapter can cover many files. */
+export interface NoteChapter {
+  title: string;
+  what: string;
+  files: string[];
+  /** path -> "12-40" or "12-40, 55-60", as the agent wrote it. Checked against the diff later. */
+  lines: Record<string, string>;
+  /** Where this part starts in the code, like "login" or "TicketService.changeStatus". */
+  entry: string;
+}
+
 export interface AgentNote {
   title: string;
   request: string;
   summary: string;
+  chapters: NoteChapter[];
   howToTest: string[];
   files: NoteFile[];
   decisions: Array<{ choice: string; why: string }>;
@@ -63,10 +76,35 @@ function normaliseNotePath(p: string): string {
   return slashPath(p).replace(/^\.\//, '').replace(/^\/+/, '');
 }
 
+/** `{ "a.js": "12-40" }`, `{ "a.js": [12, 40] }` and `{ "a.js": ["12-40", "55"] }` all work. */
+function asLineMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [file, spec] of Object.entries(value as Record<string, unknown>)) {
+    const pair = Array.isArray(spec) && spec.length === 2 && spec.every((n) => typeof n === 'number');
+    const text = Array.isArray(spec) ? spec.join(pair ? '-' : ', ') : String(spec ?? '');
+    if (text.trim()) out[normaliseNotePath(file)] = text.trim();
+  }
+  return out;
+}
+
+function asChapters(value: unknown): NoteChapter[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Array<Record<string, unknown>>)
+    .map((c) => ({
+      title: asText(c?.title ?? c?.name),
+      what: asText(c?.what ?? c?.summary ?? c?.text),
+      files: asList(c?.files).map(normaliseNotePath),
+      lines: asLineMap(c?.lines),
+      entry: asText(c?.entry ?? c?.start),
+    }))
+    .filter((c) => c.title || c.what);
+}
+
 /**
  * Read the agent's note, if one was written after `sinceIso`. An older note
  * belongs to an earlier task and must not be attached to this one.
- * Tolerant of small format slips — agents do not always follow a schema exactly.
+ * Tolerant of small format slips: agents do not always follow a schema exactly.
  */
 export function readNote(root: string, sinceIso?: string): AgentNote | null {
   const file = notePath(root);
@@ -86,6 +124,7 @@ export function readNote(root: string, sinceIso?: string): AgentNote | null {
       title: asText(raw.title),
       request: asText(raw.request),
       summary: asText(raw.summary),
+      chapters: asChapters(raw.chapters),
       howToTest: asList(raw.howToTest),
       files: files
         .map((f) => ({ path: normaliseNotePath(asText(f?.path)), level: normaliseLevel(f?.level), why: asText(f?.why) }))
@@ -125,6 +164,10 @@ export const NOTE_TEMPLATE = `{
   "title": "short title",
   "request": "what the owner asked, in one line",
   "summary": "2-4 short sentences: what changed and why",
+  "chapters": [
+    { "title": "short name for one part", "what": "1-3 plain sentences about this part",
+      "files": ["exact/path"], "lines": { "exact/path": "12-40" }, "entry": "function where this part starts" }
+  ],
   "howToTest": ["step 1", "step 2"],
   "files": [{ "path": "exact/path/from/the/list", "level": "start | important | small", "why": "one sentence" }],
   "decisions": [{ "choice": "what you chose", "why": "why" }],
@@ -148,6 +191,8 @@ export function askForNoteMessage(
     `Put EVERY changed file in "files". You decide the level:`,
     `"start" = the heart of the change, read first (1-3 files). "important" = worth reading. "small" = a minor follow-up change.`,
     `"why" = why that file changed, in one sentence.`,
+    `"chapters" = the story of the change in reading order: 1 chapter for a small change, up to 6 for a big one.`,
+    `One chapter can cover many files. "lines" and "entry" are optional.`,
     `Write it for the owner like this: ${explanationStyle()}`,
     `Changed files:`,
     ...lines,

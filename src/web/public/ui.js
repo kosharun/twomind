@@ -1,5 +1,5 @@
-/* Shared helpers. Everything here is used by more than one screen —
-   if only one screen needs it, it belongs in that screen's module. */
+/* Shared helpers. Everything here is used by more than one screen.
+   If only one screen needs it, it belongs in that screen's module. */
 
 export const $ = (selector) => document.querySelector(selector);
 
@@ -69,7 +69,18 @@ export function wireDisclosures(scope = document) {
   }
 }
 
+let leaving = null;
+
+/** Run `cleanup` the next time the screen changes, e.g. to stop listening for keys. */
+export function onLeave(cleanup) {
+  leaving = cleanup;
+}
+
 export function setScreen(html) {
-  $('#screen').innerHTML = html;
-  $('#screen').scrollTop = 0;
+  const screen = $('#screen');
+  leaving?.();
+  leaving = null;
+  screen.classList.remove('full');
+  screen.innerHTML = html;
+  screen.scrollTop = 0;
 }

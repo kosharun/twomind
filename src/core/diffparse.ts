@@ -37,7 +37,10 @@ export function parseUnifiedDiff(patch: string): ParsedFileDiff[] {
     }
   };
 
-  for (const line of patch.split('\n')) {
+  // Split on CRLF as well as LF. A carriage return left on the end of a line is
+  // a real line break to CSS `white-space: pre`, which double-spaced every diff
+  // on Windows.
+  for (const line of patch.split(/\r?\n/)) {
     if (line.startsWith('diff --git ')) {
       push();
       const m = line.match(/^diff --git (?:"?a\/(.*?)"?) (?:"?b\/(.*?)"?)$/);
@@ -62,7 +65,8 @@ export function parseUnifiedDiff(patch: string): ParsedFileDiff[] {
     if (hunk) {
       oldNo = Number(hunk[1]);
       newNo = Number(hunk[3]);
-      current.lines.push({ type: 'hunk', text: (hunk[5] ?? '').trim(), oldNo: null, newNo: null });
+      // A hunk line carries where it starts, so readers can place a deletion that comes first.
+      current.lines.push({ type: 'hunk', text: (hunk[5] ?? '').trim(), oldNo, newNo });
       continue;
     }
 
@@ -84,6 +88,32 @@ export function parseUnifiedDiff(patch: string): ParsedFileDiff[] {
 
   push();
   return files;
+}
+
+/**
+ * The lines a patch touched, per file, as line numbers in the new version.
+ * A deletion has no new line of its own, so it marks the line where it happened.
+ */
+export function changedLinesByFile(patch: string): Map<string, Set<number>> {
+  const out = new Map<string, Set<number>>();
+  for (const file of parseUnifiedDiff(patch)) {
+    const lines = new Set<number>();
+    let next = 1;
+    for (const line of file.lines) {
+      if (line.type === 'hunk' && line.newNo !== null) {
+        next = line.newNo;
+      } else if (line.type === 'add' && line.newNo !== null) {
+        lines.add(line.newNo);
+        next = line.newNo + 1;
+      } else if (line.type === 'ctx' && line.newNo !== null) {
+        next = line.newNo + 1;
+      } else if (line.type === 'del') {
+        lines.add(next);
+      }
+    }
+    out.set(file.path, lines);
+  }
+  return out;
 }
 
 /** Drop long runs of unchanged lines so a big file stays readable. */

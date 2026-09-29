@@ -7,12 +7,12 @@ import { run, shortId } from './util.js';
  * twomind's own bookkeeping must never be captured as "code the agent changed".
  *
  * Without this, writing a story is itself a working-tree change, so the very
- * next snapshot sees that story's own files as new — and turns THEM into
+ * next snapshot sees that story's own files as new, and turns THEM into
  * another story, whose files are seen as new by the tick after that, and so
  * on. Each generation's diff embeds the full text of the previous one (an
  * added file's diff IS its contents), so this isn't linear noise, it is
  * exponential: 1KB, then 4KB, 8KB, 16KB, 32KB of nothing but nested copies of
- * itself. This is checked in two places on purpose — excluding it from the git
+ * itself. This is checked in two places on purpose: excluding it from the git
  * pathspec below keeps the snapshot itself clean and fast, and `diffTrees`
  * filters again as the actual guarantee, since backfill diffs real commit
  * history directly and never goes through `takeSnapshot` at all.
@@ -75,7 +75,7 @@ export async function currentBranch(cwd: string): Promise<string> {
 /**
  * Capture the current working tree as a git tree id.
  * Returns null when the repo is in a state we should not touch (merge conflict,
- * no git, etc.) — callers must treat that as "skip capture", never as an error.
+ * no git, etc.). Callers must treat that as "skip capture", never as an error.
  */
 export async function takeSnapshot(root: string, scratchDir: string): Promise<string | null> {
   if (!(await isGitRepo(root))) return null;
@@ -207,8 +207,8 @@ export async function diffTrees(
 
     // Authoritative exclusion: this runs regardless of how `before`/`after`
     // were produced, so it also protects `backfill`, which diffs real commit
-    // hashes directly and never passes through the pathspec exclude above —
-    // a commit the user made themselves can easily contain earlier story
+    // hashes directly and never passes through the pathspec exclude above.
+    // A commit the user made themselves can easily contain earlier story
     // files (e.g. "git add -A && git commit"), and those must never be
     // recaptured as if they were a new code change either. This must happen
     // BEFORE totals are accumulated, or an excluded file's line counts still
@@ -265,7 +265,7 @@ export async function recentCommits(root: string, limit = 25): Promise<CommitInf
     .filter((c) => c.hash);
 }
 
-/** git's fixed id for an empty tree — the parent of a repository's first commit. */
+/** git's fixed id for an empty tree: the parent of a repository's first commit. */
 export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 export async function parentOf(root: string, hash: string): Promise<string> {

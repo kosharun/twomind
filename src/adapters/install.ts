@@ -39,7 +39,7 @@ interface HookSettings {
   [key: string]: unknown;
 }
 
-// Not the literal word "twomind" — during development the CLI is invoked as
+// Not the literal word "twomind": during development the CLI is invoked as
 // ".../simplifycode/dist/cli.js", so that word never appears in the command.
 // "hook prompt --agent" / "hook stop --agent" is unique to our subcommands
 // regardless of install path or package name.
@@ -51,7 +51,7 @@ const MARKER = /\bhook (prompt|stop|tool) --agent\b/;
  * On Windows, Claude Code runs hook commands through Git Bash ("/usr/bin/bash
  * -c ..."). Bash treats "\" as an escape character, so an unquoted Windows path
  * like C:\Users\me\node.exe reaches it as "C:Usersmenode.exe" and the hook dies
- * with "command not found" — every single time, silently. That is exactly what
+ * with "command not found", every single time, silently. That is exactly what
  * happened here, and it is a known problem across many tools (anthropics/
  * claude-code#21878). Windows accepts forward slashes everywhere, and no shell
  * treats "/" as special, so we always write those. Quotes only when a path has
@@ -81,7 +81,7 @@ function agentFile(root: string, agent: AgentId): string {
  *
  * They used to sit right beside settings.json as `settings.json.bak-<time>`.
  * That put a brand-new, untracked file straight into the working tree at
- * exactly the moment a diagnostic capture might run — and being new, config-
+ * exactly the moment a diagnostic capture might run. Being new, config-
  * shaped, and 24 lines long, it scored higher than a real one-line edit and
  * won "Start here". Putting backups under `.twomind/.local/` means they are
  * gitignored AND already excluded from every diff twomind ever takes, so this

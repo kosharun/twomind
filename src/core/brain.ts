@@ -9,7 +9,7 @@ import type { ScanResult } from './scan.js';
  *
  * The size limits here are deliberate. Research on agent instruction files is
  * consistent: long context files do not help and often hurt, because models
- * follow roughly 150–200 instructions well and then start ignoring all of them
+ * follow roughly 150 to 200 instructions well and then start ignoring all of them
  * rather than the least important ones. So the always-loaded core stays tiny and
  * everything else is loaded only when it is relevant.
  */
@@ -55,7 +55,7 @@ function bullet(value: string): string {
 export function renderOverview(scan: ScanResult, answers: InterviewAnswers): string {
   return `# What this project is
 
-> Read this first. Keep it short — this file is loaded into every agent session.
+> Read this first. Keep it short: this file is loaded into every agent session.
 
 **In one sentence:** ${bullet(answers.summary || scan.description)}
 
@@ -65,7 +65,7 @@ export function renderOverview(scan: ScanResult, answers: InterviewAnswers): str
 
 **Areas the owner wants to understand deeply:** ${bullet(answers.deepAreas)}
 
-## Stack (detected — correct anything wrong)
+## Stack (detected, correct anything wrong)
 
 - Languages: ${scan.languages.join(', ') || 'unknown'}
 - Frameworks: ${scan.frameworks.join(', ') || 'none detected'}
@@ -140,7 +140,7 @@ ${bullet(answers.testingRules)}
 export function renderReadme(projectName: string): string {
   return `# Twomind
 
-This folder is shared memory for **${projectName}** — for you and for every AI agent
+This folder is shared memory for **${projectName}**, for you and for every AI agent
 working here. It is plain Markdown and JSON, readable without any tool.
 
 | Folder | What is in it | Loaded by agents |
@@ -148,7 +148,7 @@ working here. It is plain Markdown and JSON, readable without any tool.
 | \`project/\` | What this project is, the rules, decisions | Always (kept small on purpose) |
 | \`project/rules/\` | Rules for one area only | Only when those files are touched |
 | \`map/\` | Plain-language map of the code and the data | On demand |
-| \`stories/\` | One entry per prompt: what changed and why | Never — these are for humans |
+| \`stories/\` | One entry per prompt: what changed and why | Never, these are for humans |
 | \`inbox/\` | Things the AI wants to remember, waiting for your yes | Never |
 | \`.local/\` | Raw prompts and snapshots. Gitignored, stays on your machine | Never |
 
@@ -179,7 +179,7 @@ const BLOCK_END = '<!-- twomind:end -->';
  */
 export function managedBlock(recordCommand: string): string {
   return `${BLOCK_START}
-## Twomind (managed block — edit the files in \`.twomind/project/\`, not this block)
+## Twomind (managed block: edit the files in \`.twomind/project/\`, not this block)
 
 Before substantial work, read \`.twomind/project/overview.md\` and \`.twomind/project/rules.md\`.
 Before creating a new function, component or helper, search for an existing one first.
@@ -192,6 +192,10 @@ Before creating a new function, component or helper, search for an existing one 
   "title": "short title",
   "request": "what the owner asked, in one line",
   "summary": "2-4 short, plain sentences: what changed and why",
+  "chapters": [
+    { "title": "short name for one part", "what": "1-3 plain sentences about this part",
+      "files": ["exact/path"], "lines": { "exact/path": "12-40" }, "entry": "function where this part starts" }
+  ],
   "howToTest": ["step 1", "step 2"],
   "files": [{ "path": "exact/path", "level": "start | important | small", "why": "one sentence" }],
   "decisions": [{ "choice": "what you chose", "why": "why" }],
@@ -201,6 +205,8 @@ Before creating a new function, component or helper, search for an existing one 
 
 List every file you changed. You decide the level: "start" = the heart of the change
 (1-3 files), "important" = worth reading, "small" = a minor follow-up. Use simple words.
+"chapters" tell the change as a story, in reading order: 1 for a small change, up to 6 for a
+big one. One chapter can cover many files. "lines" and "entry" are optional.
 
 Claude Code and Codex save the note by themselves. In any other tool, run this after
 writing the note: \`${recordCommand}\`
@@ -212,7 +218,7 @@ ${BLOCK_END}`;
  *
  * Claude Code reads AGENTS.md on its own only when there is no CLAUDE.md, and
  * only from v2.1.277. A CLAUDE.md that imports AGENTS.md works in every
- * version and every session, so we add that import — the same one-line setup
+ * version and every session, so we add that import. It is the same one-line setup
  * as a CLAUDE.md that says only "@AGENTS.md".
  */
 export function ensureClaudeImport(root: string): 'created' | 'added' | 'present' {

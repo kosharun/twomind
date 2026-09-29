@@ -1,6 +1,6 @@
 # The guided story
 
-**Approved by the owner on 2026-09-29. Not built yet.**
+**Approved by the owner on 2026-09-29. Built the same day:** the Changes screen shows chapters, and the agent writes them as `chapters` in its note. Each chapter about code has a Simulate button.
 
 ## The problem
 
@@ -16,7 +16,7 @@ agent in one simple sentence.
 better than one-sentence-per-file: 10 files can become 3 sentences, because the
 story is about what the change *does*, not about how many files it touched.
 
-Example — the dummy app, 10 files:
+Example: the dummy app, 10 files:
 
 ```
  ●  1. The login door                                    3 files
@@ -73,11 +73,11 @@ Rules:
   It cannot invent code.
 - **Files with no chapter are still shown**, under "not in any chapter". Nothing
   is ever hidden from you.
-- Ask for 3–6 chapters. Not one per file.
+- Ask for 1 chapter for a small change, up to 6 for a big one. Not one per file.
 
 ## The honest costs
 
-1. **A little more work for the agent** — maybe 150–250 extra words per change.
+1. **A little more work for the agent:** maybe 150 to 250 extra words per change.
 2. **The agent can be wrong.** Its sentence is its claim. The real code sits
    right next to it, so you can check in one glance.
 3. **Sometimes the agent will skip it.** That is why the plain view stays

@@ -5,13 +5,13 @@ import path from 'node:path';
 /**
  * A visibility escape hatch for the hooks.
  *
- * hookPrompt/hookStop swallow every error on purpose — a broken hook must never
+ * hookPrompt/hookStop swallow every error on purpose: a broken hook must never
  * break the agent session. The cost is that a real failure looks identical to
  * "nothing happened". This writes one line per checkpoint to a local file so a
  * silent failure can still be read back, without ever throwing itself.
  *
- * The very first checkpoint of each hook run — "what did we actually receive?"
- * — happens before we know the project root. If that lookup itself is wrong
+ * The very first checkpoint of each hook run ("what did we actually receive?")
+ * happens before we know the project root. If that lookup itself is wrong
  * (missing cwd, unexpected field names), logging only inside the project would
  * hide the one line that explains why, so a fixed fallback location always
  * gets a copy too.

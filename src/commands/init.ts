@@ -36,8 +36,8 @@ interface Question {
 /**
  * The "Core 12".
  *
- * Long setup interviews do not get finished — survey data shows people start
- * rushing after about 30 questions and abandon past 7–8 minutes. So this asks
+ * Long setup interviews do not get finished: survey data shows people start
+ * rushing after about 30 questions and abandon past 7 or 8 minutes. So this asks
  * twelve things, pre-fills every answer from the scan, and lets you press Enter
  * to accept or `s` to skip. The rest of what a project needs to know is learned
  * later, in the moment, while you actually work.
@@ -81,7 +81,7 @@ function buildQuestions(scan: ReturnType<typeof scanProject>): Question[] {
       key: 'conventions',
       ask: `Style rules worth writing down? (detected stack: ${stack || 'unknown'})`,
       why: 'Keeps new code looking like your existing code.',
-      suggestion: 'Match the style of the file being changed. Keep files small and focused — split rather than growing one big file.',
+      suggestion: 'Match the style of the file being changed. Keep files small and focused: split rather than growing one big file.',
     },
     {
       key: 'sharedCodeLocation',
@@ -198,7 +198,7 @@ export async function init(options: InitOptions): Promise<void> {
       `    AI files    ${scan.contextFiles.length} found, about ${scan.contextTokens.toLocaleString()} tokens read before every task`
     );
     if (scan.contextTokens > 6000) {
-      console.log(c.dim('                that is a lot — Twomind can help shrink it later'));
+      console.log(c.dim('                that is a lot, Twomind can help shrink it later'));
     }
   }
   console.log('');
@@ -250,11 +250,11 @@ export async function init(options: InitOptions): Promise<void> {
   console.log('');
   console.log(c.bold('  Next'));
   console.log(`    ${c.cyan('twomind serve')}    open the dashboard`);
-  console.log(c.dim('    then just work normally — every prompt that changes files becomes a story'));
+  console.log(c.dim('    then just work normally: every prompt that changes files becomes a story'));
   console.log('');
 
   if (already) {
-    console.log(c.dim('  (this project was already set up — settings and hooks were refreshed)'));
+    console.log(c.dim('  (this project was already set up, settings and hooks were refreshed)'));
     console.log('');
   }
 }

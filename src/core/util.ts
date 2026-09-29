@@ -8,7 +8,7 @@ export interface RunResult {
 }
 
 /**
- * Run a command and capture its output. Never throws on a non-zero exit —
+ * Run a command and capture its output. Never throws on a non-zero exit:
  * callers decide what a failure means. `env` is merged over process.env.
  */
 export function run(

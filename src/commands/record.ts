@@ -5,7 +5,7 @@ import { currentBranch, diffTrees, takeSnapshot } from '../core/snapshot.js';
 import { buildStory, readLastRecorded, writeLastRecorded, writeStory } from '../core/story.js';
 
 /**
- * `twomind record` — for agents that have no Twomind hook.
+ * `twomind record`: for agents that have no Twomind hook.
  *
  * AGENTS.md tells every agent to write its note after a change. Claude Code
  * and Codex have hooks that pick the note up by themselves. Any other agent is

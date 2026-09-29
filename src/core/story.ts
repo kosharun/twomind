@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import type { AgentNote, NoteLevel } from './note.js';
+import { changedLinesByFile } from './diffparse.js';
+import type { AgentNote, NoteChapter, NoteLevel } from './note.js';
 import { slashPath } from './note.js';
 import type { DiffResult, FileChange } from './snapshot.js';
 import { resolveProjectPaths } from './paths.js';
@@ -14,7 +15,7 @@ import { shortId, slugify, timeParts, truncate } from './util.js';
  * Twomind supplies the facts: which files changed and which lines. The agent
  * supplies the meaning: what is the heart of the change, what is a small
  * follow-up, and why each file changed. Twomind never ranks or explains files
- * on its own — a file the agent did not explain is shown as exactly that.
+ * on its own: a file the agent did not explain is shown as exactly that.
  */
 
 export type StoryLevel = NoteLevel | 'unexplained';
@@ -40,8 +41,20 @@ export interface StoryGroup {
   totalDeleted: number;
 }
 
-/** Where the explanation came from — shown to the owner, never hidden. */
+/** Where the explanation came from. Shown to the owner, never hidden. */
 export type ExplainedBy = 'agent-note' | 'agent-message' | 'none';
+
+/** One part of the agent's story of a change. */
+export interface StoryChapter {
+  title: string;
+  what: string;
+  /** Paths from the real diff. Paths the agent wrote that did not change are dropped. */
+  files: string[];
+  /** Line ranges per file, kept only where they touch lines that really changed. */
+  lines: Record<string, Array<[number, number]>>;
+  /** The function the agent says this part starts at. Checked against the code when a flow opens. */
+  entry: string;
+}
 
 export interface StoryMeta {
   id: string;
@@ -57,6 +70,8 @@ export interface StoryMeta {
   /** The agent's explanation (its note), or its last chat message if it wrote no note. Redacted. */
   agentSummary: string;
   explainedBy: ExplainedBy;
+  /** The agent's story in parts. Missing on older stories and when the agent wrote none. */
+  chapters?: StoryChapter[];
   howToTest: string[];
   decisions: Array<{ choice: string; why: string }>;
   notTested: string[];
@@ -115,6 +130,65 @@ const clean = (text: string | undefined | null): string => redact(text ?? '').te
 function firstLine(text: string): string {
   const line = text.split('\n').find((l) => l.trim().length > 0) ?? '';
   return line.trim().replace(/^[#>\-*\s]+/, '');
+}
+
+/** Agents write paths relative to a subfolder, or with a prefix. Match them to the real diff. */
+function samePath(a: string, b: string): boolean {
+  const x = slashPath(a).toLowerCase();
+  const y = slashPath(b).toLowerCase();
+  return x === y || x.endsWith(`/${y}`) || y.endsWith(`/${x}`);
+}
+
+/** "12-40, 55" -> [[12, 40], [55, 55]] */
+function parseRanges(spec: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  for (const part of spec.split(/[,;]/)) {
+    const numbers = part.match(/\d+/g)?.map(Number) ?? [];
+    if (!numbers.length) continue;
+    const from = numbers[0];
+    const to = numbers[1] ?? numbers[0];
+    ranges.push([Math.min(from, to), Math.max(from, to)]);
+  }
+  return ranges;
+}
+
+/**
+ * Keep the agent's chapters honest: files must be in the real diff, and a line
+ * range survives only if it touches a line that really changed (with a few
+ * lines of slack for the code around a change).
+ */
+function buildChapters(chapters: NoteChapter[], diff: DiffResult): StoryChapter[] {
+  const changed = new Map<string, Set<number>>();
+  for (const file of diff.files) {
+    const lines = file.patch ? changedLinesByFile(file.patch).get(file.path) : undefined;
+    changed.set(file.path, lines ?? new Set());
+  }
+
+  return chapters.map((chapter) => {
+    const files: string[] = [];
+    for (const wanted of chapter.files) {
+      const real = diff.files.find((f) => samePath(f.path, wanted));
+      if (real && !files.includes(real.path)) files.push(real.path);
+    }
+
+    const lines: Record<string, Array<[number, number]>> = {};
+    for (const [wanted, spec] of Object.entries(chapter.lines)) {
+      const real = diff.files.find((f) => samePath(f.path, wanted));
+      if (!real) continue;
+      const touched = [...(changed.get(real.path) ?? [])];
+      const kept = parseRanges(spec).filter(([from, to]) => touched.some((n) => n >= from - 3 && n <= to + 3));
+      if (kept.length) lines[real.path] = kept;
+      if (!files.includes(real.path)) files.push(real.path);
+    }
+
+    return {
+      title: clean(chapter.title),
+      what: clean(chapter.what),
+      files,
+      lines,
+      entry: clean(chapter.entry),
+    };
+  });
 }
 
 export function buildStory(input: BuildStoryInput): { meta: StoryMeta; markdown: string; patch: string } {
@@ -214,6 +288,7 @@ export function buildStory(input: BuildStoryInput): { meta: StoryMeta; markdown:
     prompt,
     agentSummary,
     explainedBy,
+    chapters: buildChapters(note?.chapters ?? [], diff),
     howToTest: (note?.howToTest ?? []).map(clean).filter(Boolean),
     decisions: (note?.decisions ?? []).map((d) => ({ choice: clean(d.choice), why: clean(d.why) })),
     notTested: (note?.notTested ?? []).map(clean).filter(Boolean),
@@ -247,7 +322,7 @@ export function renderMarkdown(meta: StoryMeta): string {
   lines.push('');
   lines.push(
     `*${time} · ${meta.agent || 'unknown agent'} · ${meta.branch || 'no branch'} · ` +
-      `${meta.stats.files} file${meta.stats.files === 1 ? '' : 's'} · +${meta.stats.added} / −${meta.stats.deleted}*`
+      `${meta.stats.files} file${meta.stats.files === 1 ? '' : 's'} · +${meta.stats.added} / -${meta.stats.deleted}*`
   );
   lines.push('');
 
@@ -263,6 +338,15 @@ export function renderMarkdown(meta: StoryMeta): string {
     lines.push('> **The agent did not explain this change.**', '');
   }
 
+  if (meta.chapters?.length) {
+    lines.push('## The story, in parts', '');
+    meta.chapters.forEach((chapter, i) => {
+      lines.push(`### ${i + 1}. ${chapter.title || 'Untitled part'}`, '');
+      if (chapter.what) lines.push(chapter.what, '');
+      if (chapter.files.length) lines.push(`Files: ${chapter.files.map((f) => `\`${f}\``).join(', ')}`, '');
+    });
+  }
+
   if (meta.howToTest.length) {
     lines.push('## How to test', '');
     meta.howToTest.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
@@ -274,14 +358,14 @@ export function renderMarkdown(meta: StoryMeta): string {
     for (const p of group.files) {
       const file = meta.files.find((f) => f.path === p);
       if (!file) continue;
-      lines.push(`- \`${p}\`${file.why ? ` — ${file.why}` : ''} *(+${file.added} / −${file.deleted})*`);
+      lines.push(`- \`${p}\`${file.why ? `: ${file.why}` : ''} *(+${file.added} / -${file.deleted})*`);
     }
     lines.push('');
   }
 
   if (meta.decisions.length) {
     lines.push('## Decisions the agent made', '');
-    for (const d of meta.decisions) lines.push(`- **${d.choice}**${d.why ? ` — ${d.why}` : ''}`);
+    for (const d of meta.decisions) lines.push(`- **${d.choice}**${d.why ? `: ${d.why}` : ''}`);
     lines.push('');
   }
 
@@ -358,7 +442,7 @@ export function loadStory(root: string, id: string): (LoadedStory & { patch: str
   return { ...found, patch };
 }
 
-/** When the user last opened the dashboard — drives the Catch-up page. */
+/** When the user last opened the dashboard. Drives the Catch-up page. */
 export function readLastSeen(root: string): string | null {
   const file = path.join(resolveProjectPaths(root).local, 'last-seen.json');
   if (!existsSync(file)) return null;

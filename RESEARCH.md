@@ -97,7 +97,7 @@ Codex also keeps its own memory in `~/.codex/memories`: about 290 KB in its main
 ### 8 lessons for the product
 
 1. **Rules do not stop drift; limits do.** CURRENT.md grew into a log although its rule says not to. The tool needs hard size budgets, archiving and merging. Hermes does this: it refuses new memory until old memory is consolidated.
-2. **Reading everything every time is expensive.** About 19–26k tokens before each substantial task. Keep a small always-loaded core. Load details by area (path-scoped rules) or on request.
+2. **Reading everything every time is expensive.** About 19-26k tokens before each substantial task. Keep a small always-loaded core. Load details by area (path-scoped rules) or on request.
 3. **Machine maps are not human understanding.** The "hubs" in your graph report even list noise, like "Transcript" many times and "compilerOptions". Humans need a layered map with plain words.
 4. **Memory is scattered.** Repo `.ai/`, Claude's memory, Codex's memory, graphify. One repo-owned "brain" with an adapter for each agent fixes this.
 5. **Your comfort rule also creates distance.** "The owner does not read diffs; no file names" keeps replies easy, but it also keeps you away from the code. That is part of the disassociation you feel. Keep plain summaries by default, but let you zoom into real before/after code with one click ("owner view" and "engineer view").
@@ -126,7 +126,7 @@ Codex also keeps its own memory in `~/.codex/memories`: about 290 KB in its main
 | Main challenge in code review | understanding the change | Bacchelli & Bird (Microsoft) |
 | AI use vs trust | 84% use AI; 29% trust its accuracy; 66% frustrated by "almost right" answers | Stack Overflow 2025 |
 | Agents at work | 90% use them weekly, 68% daily | JetBrains 2026 |
-| Tools used in parallel | 70% use 2–4 AI tools; 15% use 5 or more | Pragmatic Engineer 2026 |
+| Tools used in parallel | 70% use 2-4 AI tools; 15% use 5 or more | Pragmatic Engineer 2026 |
 | Duplication vs refactoring | copy/paste 15.7% vs moved code 3.8%; block duplication +81% since 2023; function connectivity −35% | GitClear 2026 |
 | Issues in AI pull requests | about 1.7× more issues; logic issues +75%; readability issues more than 3× | CodeRabbit (470 PRs) |
 | Review of AI pull requests | most AI-generated PRs in the sample received no review at all | EASE 2026 paper |
@@ -160,7 +160,7 @@ Short answer: **the parts exist, but the whole does not.** The parts are also sp
 | **Session recorders and attribution** | Entire ($60M seed; CLI 5.1k), git-ai with the Agent Trace spec, SpecStory | Save transcripts next to commits. `entire why file:line` jumps from a line to its prompt. Line-level AI attribution. | You must read raw transcripts. They keep records, not understanding. |
 | **Change review** | CodeRabbit (walkthroughs, Change Stack), Claude Code `/diff`, Codex review pane, Whiteboard (1.9k, semantic diff) | Diffs in reading order, block summaries, sequence diagrams. | PR-level or live-only. No history of your intent. No learning loop. |
 | **Duplicate prevention** | DRYwall (a jscpd plugin), Pharaoh, Serena | Detect clones; semantic code search. | Not tied to the moment the AI writes new code. Not explained to you. |
-| **Measuring comprehension** | nobody (open research problem) | — | A 2026 paper argues that "who wrote it" no longer tells you who *understands* it, and that comprehension-based measurement is still unsolved. |
+| **Measuring comprehension** | nobody (open research problem) | (none) | A 2026 paper argues that "who wrote it" no longer tells you who *understands* it, and that comprehension-based measurement is still unsolved. |
 
 ### Where the big players are heading
 
@@ -179,10 +179,10 @@ Short answer: **the parts exist, but the whole does not.** The parts are also sp
 | "I lost my mental model of my own project." | Willison, Storey, HN quotes, Anthropic trial | Change Stories, Catch-up, a layered Map, the Familiarity view. |
 | "It made a new function when one already existed." | GitClear 2026; DRYwall; very common complaint | Reuse Guard: a symbol index, a "search before create" check at write time, and a weekly duplicate report. Each story shows "reused vs new, and why". |
 | "It writes in a different style every time." | CodeRabbit: readability issues more than 3× | Conventions are detected from code, confirmed by you, and stored as area rules. Every story has a rule check. |
-| "It ignores my CLAUDE.md." | HumanLayer: models follow about 150–200 instructions well; rule-following drops inside long sessions | A small always-loaded core. Area rules load only for the files being touched. Hooks check the important rules mechanically. |
+| "It ignores my CLAUDE.md." | HumanLayer: models follow about 150-200 instructions well; rule-following drops inside long sessions | A small always-loaded core. Area rules load only for the files being touched. Hooks check the important rules mechanically. |
 | "I re-explain my project every session." | claude-mem's 94.8k stars | The Project Brain loads lean at session start, with details on demand. |
 | "My AI files are outdated or bloated." | ETH study; your CURRENT.md | Size budgets, archiving, merging duplicates, stale-citation checks, review dates. |
-| "Every tool wants its own rules file." | 70% use 2–4 tools; many sync tools exist | One source in the repo, compiled to AGENTS.md, CLAUDE.md, Cursor rules, GEMINI.md and Copilot instructions. |
+| "Every tool wants its own rules file." | 70% use 2-4 tools; many sync tools exist | One source in the repo, compiled to AGENTS.md, CLAUDE.md, Cursor rules, GEMINI.md and Copilot instructions. |
 | "AI summaries are long and still unclear." | kren87 quote; the 86-programmer study | Three layers (1 line → 5 bullets → code), a narrative reading order, evidence links, a "not verified" section. |
 | "I don't know what changed while I was away." | Claude's session recap is one line and not saved | A Catch-up page: since your last visit, the top 5 things, and your blind spots. |
 | "AI pull requests are too big; we just approve them." | EASE 2026; CodeRabbit | Per-prompt stories are small, so review happens continuously, not only at the end. |
@@ -228,7 +228,7 @@ Short answer: **the parts exist, but the whole does not.** The parts are also sp
 **Pillar 1: Project Brain (for the AI and for you)**
 
 - **Scan and import (MVP).** Detect the stack, frameworks, database, tests, CI, folder structure and naming. Import existing AGENTS.md, CLAUDE.md, `.cursor/rules`, `.ai/` and graphify output.
-- **Interview (MVP).** "Core 12" questions (about 5–7 minutes), with answers pre-filled from the scan. Optional topic packs come later (about 100 questions in total). See F6.
+- **Interview (MVP).** "Core 12" questions (about 5-7 minutes), with answers pre-filled from the scan. Optional topic packs come later (about 100 questions in total). See F6.
 - **Two profiles.** *Me* follows you across projects (language, explanation level, pet peeves, git habits) and stays on your machine. *Project* lives in the repo.
 - **Rule placement.** Global rules (tiny). Area rules (load only when those files are touched). Reference docs (on demand).
 - **Learning loop (v0.2).** The tool notices corrections, repeated instructions, decisions and discoveries. It proposes memory updates. You approve. It places each one at the right level. A weekly "lint" removes duplicates, contradictions and stale facts. See F7.
@@ -237,10 +237,10 @@ Short answer: **the parts exist, but the whole does not.** The parts are also sp
 **Pillar 2: Change Stories (your "latest prompt" section)**
 
 - **One story per prompt (MVP),** only when files changed. Small questions do not create stories.
-- **Live while the agent works (MVP).** The dashboard is a normal web page open in a second window. It updates itself the moment a file is saved — you do not refresh it, and you do not wait for the agent to finish. On a long run you watch files tick over one by one instead of facing a wall of changes at the end.
+- **Live while the agent works (MVP).** The dashboard is a normal web page open in a second window. It updates itself the moment a file is saved: you do not refresh it, and you do not wait for the agent to finish. On a long run you watch files tick over one by one instead of facing a wall of changes at the end.
 - **Session story:** several prompts about the same goal are grouped.
 - **Before/after on every file (MVP).** Each file in a story has its own old-vs-new view (removed lines red, added lines green, like a normal diff), plus a plain-language line above it saying what changed in that one file and why. You can flip between "just the summary" and "show me the code."
-- **Big-change navigator (MVP).** When one prompt touches many files (10, 40, 100+), the story does not dump them alphabetically. It sorts them into a reading order — data and database first, then core logic, then the functions that call that logic, then screens, then tests and config last — and tags each group ("core", "just a caller", "styling only", "tests"). It opens with the 2–3 files that matter most already expanded, and the rest collapsed one line each, so you know exactly where to start and which ones are safe to skim.
+- **Big-change navigator (MVP).** When one prompt touches many files (10, 40, 100+), the story does not dump them alphabetically. It sorts them into a reading order (data and database first, then core logic, then the functions that call that logic, then screens, then tests and config last) and tags each group ("core", "just a caller", "styling only", "tests"). It opens with the 2-3 files that matter most already expanded, and the rest collapsed one line each, so you know exactly where to start and which ones are safe to skim.
 - **Timeline (MVP):** every story, searchable, filtered by area, agent or date.
 - **Catch-up (MVP):** "since you last looked". Counts, the top 5 things to know, new rules, new tables or fields, and **blind spots** (areas that changed a lot that you have not opened).
 - **Backfill (MVP):** on install, build stories from recent git commits and existing Claude and Codex session files. The dashboard is useful in the first minute.
@@ -250,12 +250,12 @@ Short answer: **the parts exist, but the whole does not.** The parts are also sp
 
 - **Map (v0.2).** Zoom levels like the C4 model: system (users, outside services), apps (client, server, workers, database), features (for example Rentals, Utilities, Groups), then files and functions. Each box has a plain-language purpose, "last changed by story #…", and your familiarity. Use graphify or Understand-Anything data when it exists.
 - **Search a method, see who calls it (v0.2).** Type a function or method name and get a small graph: what calls it, what it calls, and the branch it takes (for example a `switch` with `case TODO` / `case IN_PROGRESS` / `case DONE`, each shown as its own labelled path, plus an error path if one exists). Each box gets a one-line plain-English purpose, generated once and corrected by you. This is read straight from the code structure (safe, deterministic, and free to compute), not guessed by an AI.
-- **Simulate a path (v0.4, honest stretch goal).** Your friend's prototype (the screenshot) goes further: pick an input, like `status = DONE`, and it highlights only the exact chain of calls that input takes, with the real code shown step by step (Previous/Next). This is genuinely useful, and worth building, but it must be built on **real evidence, not a guess**: either (a) recorded from an actual test run that exercised that input, so every step is something that really happened, labelled "seen in test run on <date>", or (b) read directly from the `if`/`switch` structure with no execution at all, labelled "static — not run". Both are fine to ship as long as each is labelled for what it is; what should not ship is an AI *inventing* a plausible-looking trace, because the research on this is clear that a confident-looking wrong explanation is worse than no explanation.
+- **Simulate a path (v0.4, honest stretch goal).** Your friend's prototype (the screenshot) goes further: pick an input, like `status = DONE`, and it highlights only the exact chain of calls that input takes, with the real code shown step by step (Previous/Next). This is genuinely useful, and worth building, but it must be built on **real evidence, not a guess**: either (a) recorded from an actual test run that exercised that input, so every step is something that really happened, labelled "seen in test run on <date>", or (b) read directly from the `if`/`switch` structure with no execution at all, labelled "static, not run". Both are fine to ship as long as each is labelled for what it is; what should not ship is an AI *inventing* a plausible-looking trace, because the research on this is clear that a confident-looking wrong explanation is worse than no explanation.
 - **Data map (v0.2).** An ER diagram (Mermaid) and a card per table or collection: purpose, key fields, relations, which code reads and writes it, sensitive-data flags, and a **schema timeline** (which story added which field). Read from models and migrations: Mongoose, Prisma, Sequelize, TypeORM, Drizzle, Django, SQLAlchemy, Eloquent, Rails, SQL dumps. Read a live database only with your explicit OK, read-only, never storing credentials.
 - **Reuse Guard (MVP, basic version).** A symbol index (functions, components, hooks, routes, tables) with a one-line purpose for each. When the AI creates a new function, the tool checks for similar existing ones and tells the AI at once: "Similar exists: `formatKsh()` in utils/money.js. Reuse it or explain why not." A weekly duplicate report (jscpd) with an "ask AI to merge" button. Every story shows "reused vs new".
 - **Familiarity (v0.3).** A *comprehension ledger*: evidence that you understand an area (you opened a story, expanded the code, answered a check, edited it yourself, or confirmed a map card). It fades over time and resets when the code changes a lot. It shows "up to date", "changed since you looked" or "never reviewed". Research calls comprehension-based measurement an open problem, so you could be among the first to ship it.
 
-*Note on the screenshot you shared:* that flow-and-simulate view is a great reference for what a mature version of the Map can look like — the "business / utility / exception" boxes and labelled branches (`case DONE`, `ticketExists = false`) are exactly the kind of plain-structure reading a tree-sitter–based map can produce safely. The "Simulate" panel with Previous/Next and real code per step is the harder, later piece described above.
+*Note on the screenshot you shared:* that flow-and-simulate view is a great reference for what a mature version of the Map can look like: the "business / utility / exception" boxes and labelled branches (`case DONE`, `ticketExists = false`) are exactly the kind of plain-structure reading a tree-sitter-based map can produce safely. The "Simulate" panel with Previous/Next and real code per step is the harder, later piece described above.
 
 ### F5. Example: one Change Story
 
@@ -309,12 +309,12 @@ Blind spots: Payments changed 4 times, and you have not opened those stories.   
 
 ### F6. The onboarding interview: your "100 questions", done so people finish them
 
-Evidence: SurveyMonkey data shows that once a survey passes about 30 questions, people spend roughly half the time on each question, and more people quit after 7–8 minutes. The "interview me" technique (from Thariq at Anthropic) works because the questions are specific and asked at the right moment. OpenClaw keeps its first-run ritual short and personal.
+Evidence: SurveyMonkey data shows that once a survey passes about 30 questions, people spend roughly half the time on each question, and more people quit after 7-8 minutes. The "interview me" technique (from Thariq at Anthropic) works because the questions are specific and asked at the right moment. OpenClaw keeps its first-run ritual short and personal.
 
 **Strategy**
 
 1. **Scan first, ask second.** Propose answers from the code: "I found node:test in 27 files. Is that your test runner?" Confirming is much easier than writing (recognition beats recall).
-2. **Core 12 first (about 5–7 minutes).** Everything else is an optional pack.
+2. **Core 12 first (about 5-7 minutes).** Everything else is an optional pack.
 3. **Just-in-time questions.** When the AI meets an undecided rule during real work, it asks one question and saves the answer (for example with Claude Code's AskUserQuestion tool). This spreads the 100 questions over weeks, at moments when they matter.
 4. Every question has **Skip**, **Not sure** and **Ask me later**, plus a one-line "why we ask".
 5. Show progress, and show the effect: "Your answer created rule R-04."
@@ -327,17 +327,17 @@ Evidence: SurveyMonkey data shows that once a survey passes about 30 questions, 
 | 1 | What does this project do, and for whom? (one sentence) | README | project overview (always loaded) |
 | 2 | Stage: prototype, MVP, live users, or live with money or sensitive data? | git history, deploy files | risk level |
 | 3 | Which areas are most important or most risky? | detected modules | priorities + area rules |
-| 4 | What must the AI never do without asking? (push, deploy, migrations, database data, new dependencies, auth, deleting files, big refactors) | — | global rules |
-| 5 | How much should the AI decide alone? | — | global rules |
-| 6 | How should explanations look? (language, plain or technical, length, always "how to test"?) | — | Me profile |
-| 7 | How close do you want to stay to the code? (summaries only, plus key diffs, or full diffs; catch-up; optional quiz) | — | Me profile |
+| 4 | What must the AI never do without asking? (push, deploy, migrations, database data, new dependencies, auth, deleting files, big refactors) | (none) | global rules |
+| 5 | How much should the AI decide alone? | (none) | global rules |
+| 6 | How should explanations look? (language, plain or technical, length, always "how to test"?) | (none) | Me profile |
+| 7 | How close do you want to stay to the code? (summaries only, plus key diffs, or full diffs; catch-up; optional quiz) | (none) | Me profile |
 | 8 | Code style: I detected X, Y and Z. Is that correct? | lint config, code | area rules |
 | 9 | Where do shared helpers and components live? Should the AI always search before creating new ones? | folders | rules + Reuse Guard |
 | 10 | What must be tested before "done"? What must never run (for example database-writing tests)? | test setup | workflow + rules |
 | 11 | What annoyed you most in past AI sessions? | past sessions (optional scan) | rules ("pet peeves") |
 | 12 | Which areas do you want to understand deeply yourself? | modules | Familiarity goals |
 
-**Topic packs** (5–10 questions each; the community can add more): Product and users · Business rules and domain words (glossary) · Architecture and boundaries · Data and database · Security and privacy · Frontend and design system · Performance · Git and release · Team and collaboration · Learning and communication.
+**Topic packs** (5-10 questions each; the community can add more): Product and users · Business rules and domain words (glossary) · Architecture and boundaries · Data and database · Security and privacy · Frontend and design system · Performance · Git and release · Team and collaboration · Learning and communication.
 
 ### F7. The learning loop (Hermes-style, but visible and safe)
 
@@ -372,7 +372,7 @@ What to borrow from others:
 
 | Option | Good | Bad | Verdict |
 |---|---|---|---|
-| Agent Skill (SKILL.md) | Open standard since Dec 2025; works in 26+ tools; costs about 30–50 tokens until it is used | Depends on the AI remembering to act; no UI | **Yes**, for the AI-facing part |
+| Agent Skill (SKILL.md) | Open standard since Dec 2025; works in 26+ tools; costs about 30-50 tokens until it is used | Depends on the AI remembering to act; no UI | **Yes**, for the AI-facing part |
 | Hooks + CLI | Mechanical capture that works even if the AI forgets | One adapter per agent; hooks need a trust approval | **Yes, this is the engine** |
 | MCP server | Any agent can ask "find existing", "why", "explain this area" | More setup; more tool tokens | Phase 2 |
 | **Local web dashboard** (`npx … serve`) | Works with every agent and editor; rich visuals; all operating systems; easy to screenshot | A separate browser tab | **Yes, the main UI for the MVP** |
@@ -408,7 +408,7 @@ What to borrow from others:
 
 **What happens on each prompt**
 
-1. **Prompt sent** (UserPromptSubmit hook). Save your prompt, with secrets redacted, on your machine only by default. Take a snapshot of the working tree using a temporary git index, so your staging area and branches are not touched. Optionally add the 3–5 rules for the area you are working in.
+1. **Prompt sent** (UserPromptSubmit hook). Save your prompt, with secrets redacted, on your machine only by default. Take a snapshot of the working tree using a temporary git index, so your staging area and branches are not touched. Optionally add the 3-5 rules for the area you are working in.
 2. **File written** (PostToolUse hook on Write/Edit). Note the changed files. The Reuse Guard checks new functions and components against the index and replies to the AI at once if a similar one exists.
 3. **AI finishes** (Stop hook). Take a second snapshot and compute the exact diff for *this* prompt, even if nothing was committed. If files changed, the hook asks the AI once for a short, structured "why" (at most about 120 words). The engine adds all the facts for free: files, functions, tests run, schema changes, map impact. The story is saved, the dashboard updates live, and one line with a link appears in the terminal.
 4. **Session ends or goes idle.** Group prompts into a session story, send memory proposals to the Inbox, update the map, and check size budgets.
@@ -458,7 +458,7 @@ AGENTS.md                  ← a managed block that points to .brain (the rest i
 | 4 | **Explanations can create false confidence** (the 86-programmer study). | Evidence links, labels (stated / inferred / verified), a "not verified" section, short and specific wording. |
 | 5 | **Cognitive load:** people understand in chunks, and in order. | Three layers (1 line → 5 bullets → code). Reading order: data → logic → API → UI → tests, like CodeRabbit's Change Stack. |
 | 6 | **Recognition beats recall.** | The interview proposes answers; you confirm or fix them. |
-| 7 | **Survey fatigue:** time per question halves after about 30 questions, and quitting rises after 7–8 minutes. | Core 12, packs later, just-in-time questions, Skip / Not sure / Later, a progress bar. |
+| 7 | **Survey fatigue:** time per question halves after about 30 questions, and quitting rises after 7-8 minutes. | Core 12, packs later, just-in-time questions, Skip / Not sure / Later, a progress bar. |
 | 8 | **Habits** need a trigger, an easy action, a reward and an investment (Fogg; Eyal). | Trigger: the AI finishes. Action: glance at a one-line card. Reward: relief and clarity. Investment: approving a memory makes tomorrow better. |
 | 9 | **The peak-end rule:** the end of an experience shapes how we remember all of it. | The end-of-prompt card must feel calm, clear and honest. It is the key moment of the product. |
 | 10 | **Calm technology and developer experience** (feedback loops, cognitive load, flow). | No red guilt badges, no interruptions, digests instead of alerts, never block the agent. |
@@ -498,15 +498,15 @@ The lesson: **features are not enough.** You need a named pain, an instant visua
 
 ### I4. Launch plan
 
-- **Before launch (3–6 weeks).** Use it on RecordLOGS and Kultni. Build in public: short clips of story cards. Get 30–100 real users (Discord servers, r/ClaudeAI, your university, Croatian developer groups). Fix every bump in onboarding. Record a 30–45 second demo video.
+- **Before launch (3-6 weeks).** Use it on RecordLOGS and Kultni. Build in public: short clips of story cards. Get 30-100 real users (Discord servers, r/ClaudeAI, your university, Croatian developer groups). Fix every bump in onboarding. Record a 30-45 second demo video.
 - **Launch day (one day, Tuesday to Thursday).** Post on Hacker News between 12:00 and 17:00 UTC. (A study of 138 AI repos found that posts at good hours gained about 200 more stars; the "Show HN" label itself gave no advantage.) The same day: Reddit (r/ClaudeAI, r/ChatGPTCoding, r/cursor, r/vibecoding), an X thread with the video, LinkedIn (graphify spread strongly there), and an article on dev.to or Medium: "Comprehension debt is the new tech debt". Answer every comment for 48 hours. Keep all attention on one or two days, because GitHub Trending rewards **star velocity**, not total stars.
-- **Weeks 2–6.** Pull requests to awesome lists (awesome-claude-code has 36.8k stars; also awesome-codex-plugins and awesome-mcp-servers). Submit to skills.sh, the Claude plugin directory and the Codex marketplace. Product Hunt. YouTube creators. Weekly releases. Translated READMEs.
+- **Weeks 2-6.** Pull requests to awesome lists (awesome-claude-code has 36.8k stars; also awesome-codex-plugins and awesome-mcp-servers). Submit to skills.sh, the Claude plugin directory and the Codex marketplace. Product Hunt. YouTube creators. Weekly releases. Translated READMEs.
 - **Ongoing.** Data posts ("We measured comprehension debt in 20 AI-built repos"). Community question packs and stack presets (Next.js, Laravel, Django, Express + Mongoose…). Integrations with graphify and Understand-Anything, so their users become yours.
 
 ### I5. README blueprint (the first screen matters most)
 
 1. Logo, a one-line promise, and one line on who it is for.
-2. A 20–30 second GIF: prompt → story card → before/after + why → catch-up.
+2. A 20-30 second GIF: prompt → story card → before/after + why → catch-up.
 3. A one-line install, plus "works with" logos.
 4. "In 60 seconds you get…" (3 bullets).
 5. "Why this exists", with 3 linked research numbers.
@@ -553,7 +553,7 @@ The lesson: **features are not enough.** You need a named pain, an instant visua
 - **Always-loaded AI context** in tokens (target: about 4k or less).
 - **Story open rate** within 24 hours, and the Inbox approve/reject ratio.
 - **Adoption:** installs, week-4 retention (repos still active), stars.
-- **A small study you can publish:** 10–20 developers, a before/after quiz on their own repo, using the four areas from Anthropic's trial (debugging, reading code, writing code, concepts).
+- **A small study you can publish:** 10-20 developers, a before/after quiz on their own repo, using the four areas from Anthropic's trial (debugging, reading code, writing code, concepts).
 
 ---
 
@@ -562,15 +562,15 @@ The lesson: **features are not enough.** You need a named pain, an instant visua
 | Phase | Time (you + AI) | Scope |
 |---|---|---|
 | 0 · Spike | 1 week | Hooks for Claude Code and Codex; snapshots and diffs; the first Story file; test on Kultni. |
-| 1 · MVP (v0.1) | 4–6 weeks | Scan + import + Core 12; Project Brain files + AGENTS.md block; Stories + Timeline + Catch-up + backfill; basic Reuse Guard; local dashboard; redaction; the `score` command. Use it daily on RecordLOGS and Kultni. Soft launch to early users. |
+| 1 · MVP (v0.1) | 4-6 weeks | Scan + import + Core 12; Project Brain files + AGENTS.md block; Stories + Timeline + Catch-up + backfill; basic Reuse Guard; local dashboard; redaction; the `score` command. Use it daily on RecordLOGS and Kultni. Soft launch to early users. |
 | 2 · v0.2 | +4 weeks | Learning loop + Inbox + lint; Map (zoom levels) + Data map; Cursor, Gemini and Copilot adapters; MCP server; graphify import. **Big public launch here.** |
-| 3 · v0.3 | +4–6 weeks | VS Code extension ("why is this here?", line markers); Familiarity; comprehension checks; team mode; share and export. |
+| 3 · v0.3 | +4-6 weeks | VS Code extension ("why is this here?", line markers); Familiarity; comprehension checks; team mode; share and export. |
 | 4 · v1.0 | later | A stable file-format spec, a docs site, stack presets, community packs. Maybe a paid team or cloud tier (graphify went to YC with an enterprise tier). |
 
 **First two weeks, step by step**
 
 1. Decide the name, audience and license (see section N).
-2. Write the file-format spec for `.brain/` and for one Story (1–2 pages). This is the backbone of the product.
+2. Write the file-format spec for `.brain/` and for one Story (1-2 pages). This is the backbone of the product.
 3. Build the Claude Code Stop-hook spike: snapshot → diff → story file with facts only.
 4. Add the "why" step: the Stop hook asks the AI once.
 5. Build the same spike for Codex.

@@ -4,7 +4,7 @@ import { estimateTokens, safeJsonParse } from './util.js';
 
 /**
  * A cheap look at a project so the setup interview can propose answers instead
- * of asking you to type them. Nothing here is definitive — every finding is
+ * of asking you to type them. Nothing here is definitive: every finding is
  * shown to you as "is this right?", because confirming beats recalling.
  */
 

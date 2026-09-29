@@ -96,7 +96,7 @@ const isNoise = (name: string): boolean =>
 
 const rel = (root: string, file: string): string => path.relative(root, file).replace(/\\/g, '/');
 
-function listCodeFiles(root: string): { files: string[]; skipped: number } {
+export function listCodeFiles(root: string, extensions: Set<string> = CODE_EXT): { files: string[]; skipped: number } {
   const files: string[] = [];
   let skipped = 0;
 
@@ -114,7 +114,7 @@ function listCodeFiles(root: string): { files: string[]; skipped: number } {
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
         walk(full, depth + 1);
-      } else if (CODE_EXT.has(path.extname(entry.name).toLowerCase())) {
+      } else if (extensions.has(path.extname(entry.name).toLowerCase())) {
         try {
           if (statSync(full).size > MAX_FILE_BYTES) {
             skipped += 1;

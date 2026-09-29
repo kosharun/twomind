@@ -6,7 +6,7 @@ import { recentCommits, isGitRepo } from '../core/snapshot.js';
 import { estimateTokens } from '../core/util.js';
 
 /**
- * `twomind score` — runs on any repository, with nothing installed.
+ * `twomind score`: runs on any repository, with nothing installed.
  *
  * It answers one question in about ten seconds: how much of this codebase has
  * drifted away from anyone's understanding? Every number is measured, not
@@ -43,7 +43,7 @@ const COMMON_NAMES = new Set([
 
 /**
  * Names that are *supposed* to repeat. A React component having its own
- * `handleSubmit` is not duplication, it is the convention — flagging it would
+ * `handleSubmit` is not duplication, it is the convention, and flagging it would
  * bury the real findings under noise.
  */
 const EXPECTED_REPEATS = /^(handle|on)[A-Z]/;
@@ -163,7 +163,7 @@ export async function score(cwd = process.cwd()): Promise<void> {
         label: 'Changes arrive without a "why"',
         detail: `${unexplained} of the last ${commitCount} commits carry no explanation beyond their subject line`,
         penalty: Math.min(20, Math.round((unexplained / commitCount) * 20)),
-        action: 'Capture the reason at the moment the change is made — it cannot be recovered later.',
+        action: 'Capture the reason at the moment the change is made. It cannot be recovered later.',
       });
     }
   }

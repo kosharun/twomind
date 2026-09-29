@@ -5,7 +5,7 @@
  * to a file that could be committed. It is deliberately eager: a false positive
  * costs a bit of readability, a false negative leaks a credential.
  *
- * It does NOT run over code diffs — those are already in your repository, and
+ * It does NOT run over code diffs: those are already in your repository, and
  * rewriting them would make the before/after view lie about what is on disk.
  */
 
