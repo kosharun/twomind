@@ -13,7 +13,7 @@ import { createFlowCache } from '../core/flow/cache.js';
 import { buildFlowGraph } from '../core/flow/graph.js';
 import { FLOW_EXTENSIONS } from '../core/flow/parse.js';
 import { flowStarts, searchFunctions } from '../core/flow/resolve.js';
-import { reliableChangedLines, storyStarts } from '../core/flow/stories.js';
+import { changedFunctionsIn, reliableChangedLines } from '../core/flow/stories.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(here, 'public');
@@ -230,8 +230,12 @@ export async function serve(options: ServeOptions): Promise<void> {
           const story = loadStory(root, meta.id);
           if (!story) return [];
           const changed = reliableChangedLines(meta, story.patch, stories);
-          const starts = storyStarts(project, meta, changed).whole.starts.slice(0, 4);
-          return starts.length ? [{ storyId: meta.id, title: meta.title, at: meta.createdAt, functions: starts }] : [];
+          const functions = changedFunctionsIn(
+            project,
+            meta.files.map((f) => f.path),
+            changed
+          ).slice(0, 4);
+          return functions.length ? [{ storyId: meta.id, title: meta.title, at: meta.createdAt, functions }] : [];
         });
         sendJson(res, 200, {
           builtAt: project.builtAt,
@@ -276,15 +280,25 @@ export async function serve(options: ServeOptions): Promise<void> {
         return;
       }
 
-      if (route.startsWith('/api/story/') && route.endsWith('/flows')) {
-        const id = decodeURIComponent(route.slice('/api/story/'.length, -'/flows'.length));
-        const story = loadStory(root, id);
-        if (!story) {
-          sendJson(res, 404, { error: 'story not found' });
-          return;
+      if (route === '/api/flow/outline') {
+        const project = flows.get();
+        const files = (url.searchParams.get('files') ?? '')
+          .split(',')
+          .map((f) => f.trim())
+          .filter(Boolean);
+        const byFile: Record<
+          string,
+          Array<{ name: string; owner: string | null; kind: string; route: string | null; line: number; endLine: number }>
+        > = {};
+        for (const file of files) {
+          byFile[file] = [...project.functions.values()]
+            // Only the definitions a reader would recognise as "a part of this file":
+            // not the whole-file pseudo-entry, and not a callback declared inside another function.
+            .filter((fn) => fn.file === file && fn.parent === null && fn.name !== '(top level)')
+            .sort((a, b) => a.line - b.line)
+            .map((fn) => ({ name: fn.name, owner: fn.owner, kind: fn.kind, route: fn.route, line: fn.line, endLine: fn.endLine }));
         }
-        const changed = reliableChangedLines(story.meta, story.patch, listStories(root));
-        sendJson(res, 200, storyStarts(flows.get(), story.meta, changed));
+        sendJson(res, 200, byFile);
         return;
       }
 

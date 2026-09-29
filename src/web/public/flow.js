@@ -1,23 +1,18 @@
-import { esc, getJson } from './ui.js';
+import { esc } from './ui.js';
+import { renderLines } from './highlight.js';
 
-/* The flow view: one function, what it calls, and when.
+/* The flow: one function, and what it calls, drawn as boxes and arrows.
+   This is the "Explore" view. There is no other mode.
 
-     Explore    the whole picture. Boxes can be dragged, so you can pull apart
-                anything that overlaps. Click a box to read its code.
-     Simulate   one path, drawn as a single line from left to right. You pick
-                the branches; the line is what really runs.
-
-   Simulate is a line, not the same picture dimmed, because a dimmed picture is
-   still a picture with twenty boxes in it. A line has one direction and you can
-   follow it with your finger.
-
-   Every box and every line is read from the code. The only sentences are the
-   ones agents wrote in their stories. */
+   Click a box to read about it on the right: what it calls, what an AI said
+   about its file, and its code. Drag a box if two arrows overlap. Scroll to
+   zoom. Every box and every line is read from the code with a parser; the
+   only sentences are the ones an AI wrote in a story. */
 
 const BOX = { w: 210, h: 76 };
 const GAP = { x: 132, y: 28 };
 
-const KIND = {
+const KIND_LABEL = {
   function: 'Function',
   method: 'Method',
   route: 'Route',
@@ -159,161 +154,35 @@ function curve(a, b) {
   };
 }
 
-/* ---------- the simulation ---------- */
-
-const choiceKey = (fnId, branch) => `${fnId}#${branch}`;
-
-function choiceOf(view, fnId, branchIndex) {
-  const key = choiceKey(fnId, branchIndex);
-  if (!view.choices.has(key)) view.choices.set(key, defaultArm(view.graph.functions[fnId], branchIndex));
-  return view.choices.get(key);
-}
-
-function isActive(view, fnId, path) {
-  return path.every(([branch, arm]) => choiceOf(view, fnId, branch) === arm);
-}
-
-/**
- * Which way a branch goes before you touch it: the arm that leads to the most
- * calls, so the first run shows the main road rather than an early exit.
- */
-function defaultArm(fn, branchIndex) {
-  const branch = fn.branches[branchIndex];
-  if (branch.kind === 'try') return 0;
-  const calls = fn.events.filter((e) => e.target && e.type === 'call');
-  const inside = (arm) => calls.filter((e) => e.path.some(([b, a]) => b === branchIndex && a === arm)).length;
-  const after = calls.filter((e) => e.at > branch.end && !e.path.some(([b]) => b === branchIndex)).length;
-
-  let best = 0;
-  let bestScore = -1;
-  branch.arms.forEach((arm, i) => {
-    const score = (inside(i) + (arm.exits ? 0 : after)) * 2 + (arm.exits ? 0 : 1);
-    if (score > bestScore) {
-      best = i;
-      bestScore = score;
-    }
-  });
-  return best;
-}
-
-/** Walk the path the current choices make: every box it visits, in order. */
-function simulate(view) {
-  const { graph } = view;
-  const steps = [];
-  const onStack = new Set();
-  let stopped = false;
-
-  const visit = (id, via) => {
-    if (stopped || steps.length >= 60) return;
-    const node = graph.nodeById.get(id);
-    const fn = graph.functions[id];
-    const step = { id, via, events: [], stoppedEarly: false };
-    steps.push(step);
-
-    if (node.kind === 'error') {
-      stopped = true;
-      return;
-    }
-    if (!fn || node.more) return;
-    onStack.add(id);
-
-    const marks = [
-      ...fn.branches.map((branch, index) => ({ at: branch.at, branch, index })),
-      ...fn.events.map((event, index) => ({ at: event.at, event, index })),
-    ].sort((a, b) => a.at - b.at);
-
-    let exitAt = Infinity;
-    for (const mark of marks) {
-      if (stopped) break;
-      if (mark.at > exitAt) {
-        step.stoppedEarly = marks.some((m) => m.event?.target && m.at > exitAt && isActive(view, id, m.event.path));
-        break;
-      }
-      if (mark.branch) {
-        if (!isActive(view, id, mark.branch.path)) continue;
-        const arm = mark.branch.arms[choiceOf(view, id, mark.index)];
-        if (arm?.exits) exitAt = Math.min(exitAt, mark.branch.end);
-        continue;
-      }
-      const { event, index } = mark;
-      if (!isActive(view, id, event.path)) continue;
-      step.events.push(index);
-      if (!event.target) continue;
-      if (event.type === 'throw') {
-        visit(event.target, { from: id, event: index });
-        stopped = true;
-        break;
-      }
-      if (!onStack.has(event.target)) visit(event.target, { from: id, event: index });
-    }
-    onStack.delete(id);
-  };
-
-  visit(graph.entry, null);
-  return steps;
-}
-
-/** Line numbers to light up or grey out, for the branches this path passes. */
-function armMarks(view, fnId) {
-  const fn = view.graph.functions[fnId];
-  const marks = new Map();
-  fn.branches.forEach((branch, b) => {
-    if (!isActive(view, fnId, branch.path)) return;
-    const chosen = choiceOf(view, fnId, b);
-    branch.arms.forEach((arm, a) => {
-      if (!arm.line) return;
-      for (let n = arm.line; n <= arm.endLine; n += 1) marks.set(n, a === chosen ? 'on' : 'off');
-    });
-  });
-  return marks;
-}
-
 /* ---------- pieces of markup ---------- */
 
 function nodeInner(node) {
-  return `<span class="fnode-kind">${KIND[node.kind] ?? node.kind}${node.changed ? '<i>changed</i>' : ''}</span>
+  return `<span class="fnode-kind">${KIND_LABEL[node.kind] ?? node.kind}${node.changed ? '<i>changed</i>' : ''}</span>
     <span class="fnode-name" title="${esc(node.name)}">${esc(node.name)}</span>
     <span class="fnode-sub" title="${esc(node.sub)}">${esc(node.sub)}</span>`;
 }
 
-function codeBlock(fn, marks, nowLine) {
-  const changed = new Set(fn.changedLines);
-  const rows = fn.code.map((text, i) => {
-    const n = fn.line + i;
-    const classes = ['cl', marks?.get(n), n === nowLine ? 'now' : '', changed.has(n) ? 'changed' : '']
-      .filter(Boolean)
-      .join(' ');
-    return `<span class="${classes}"><span class="n">${n}</span><span class="g">${changed.has(n) ? '+' : ''}</span>${
-      esc(text) || ' '
-    }</span>`;
-  });
-  return `<pre class="code">${rows.join('')}</pre>`;
-}
-
-function question(branch) {
-  switch (branch.kind) {
-    case 'switch':
-      return `What is <code>${esc(branch.subject)}</code>?`;
-    case 'if-chain':
-      return 'Which one is true?';
-    case 'try':
-      return 'Does it fail?';
-    default:
-      return `Is <code>${esc(branch.subject)}</code> true?`;
-  }
+function codeBlock(fn) {
+  return renderLines(fn.code, { startAt: fn.line, changed: new Set(fn.changedLines) });
 }
 
 function kindLine(node) {
-  return `<div class="fp-kind">${KIND[node.kind] ?? node.kind}${
+  return `<div class="fp-kind">${KIND_LABEL[node.kind] ?? node.kind}${
     node.changed ? ' <span class="fp-changed">changed here</span>' : ''
   }</div>`;
 }
 
-/* ---------- the explore panel ---------- */
+/** A call or a throw, as a small clickable pill instead of a sentence. */
+function pill(label, cond, dataAttr, extraClass = '') {
+  return `<button class="pill ${extraClass}" ${dataAttr}>${esc(label)}${
+    cond ? `<span class="pill-cond">${esc(cond)}</span>` : ''
+  }</button>`;
+}
 
-function explorePanel(view) {
-  const { graph } = view;
-  const node = graph.nodeById.get(view.selected);
+/* ---------- the detail panel ---------- */
+
+function detailPanel(graph, selectedId) {
+  const node = graph.nodeById.get(selectedId);
   const head = `${kindLine(node)}<h3 class="fp-name">${esc(node.name)}</h3>
     <div class="fp-where">${esc(node.sub)}${node.line ? `, line ${node.line}` : ''}</div>`;
 
@@ -323,9 +192,7 @@ function explorePanel(view) {
       <p class="fp-text">This call leaves your project and goes into <strong>${esc(node.sub)}</strong>.
       Twomind does not read inside it.</p>
       <div class="fp-section"><div class="label">Called from</div>
-        <ul class="fp-list">${callers
-          .map((c) => `<li><button class="linkish" data-goto="${esc(c.id)}">${esc(c.name)}</button></li>`)
-          .join('')}</ul>
+        <div class="pill-list">${callers.map((c) => pill(c.name, '', `data-goto="${esc(c.id)}"`)).join('')}</div>
       </div>`;
   }
 
@@ -349,215 +216,61 @@ function explorePanel(view) {
   });
 
   return `${head}
-    <div class="fp-actions">
-      <button class="btn primary" data-simulate="${esc(node.id)}">Simulate from here</button>
-      ${node.id !== graph.entry ? `<button class="btn" data-open="${esc(node.id)}">Open its own flow</button>` : ''}
-    </div>
+    ${
+      node.id !== graph.entry
+        ? `<div class="fp-actions"><button class="btn" data-open="${esc(node.id)}">Open this function on its own</button></div>`
+        : ''
+    }
     <div class="fp-section">
       <div class="label">What an AI said about this file</div>
       ${why ? `<div class="say ai"><div class="say-body small">${esc(why)}</div></div>` : '<div class="fp-none">Nothing yet.</div>'}
     </div>
     ${
       calls.length
-        ? `<div class="fp-section"><div class="label">It calls, in order</div><ol class="fp-list">${calls
-            .map(
-              (e) => `<li><span class="verb">${e.type === 'throw' ? 'throws' : 'calls'}</span>
-                <button class="linkish" data-goto="${esc(e.target)}">${esc(graph.nodeById.get(e.target).name)}</button>
-                ${e.label ? `<span class="cond">${esc(e.label)}</span>` : ''}</li>`
-            )
-            .join('')}</ol></div>`
+        ? `<div class="fp-section"><div class="label">It calls</div><div class="pill-list">${calls
+            .map((e) => pill(graph.nodeById.get(e.target).name, e.label, `data-goto="${esc(e.target)}"`, e.type === 'throw' ? 'throw' : ''))
+            .join('')}</div></div>`
         : ''
     }
     ${
       fn.calledBy.length
-        ? `<div class="fp-section"><div class="label">Called from</div><ul class="fp-list">${fn.calledBy
-            .map((c) => `<li><button class="linkish" data-open="${esc(c.id)}">${esc(c.name)}</button></li>`)
-            .join('')}</ul></div>`
+        ? `<div class="fp-section"><div class="label">Called from</div><div class="pill-list">${fn.calledBy
+            .map((c) => pill(c.name, '', `data-open="${esc(c.id)}"`))
+            .join('')}</div></div>`
         : ''
     }
-    <div class="fp-section"><div class="label">The code</div>${codeBlock(fn, null, null)}</div>`;
-}
-
-/* ---------- the simulate panel ---------- */
-
-function choices(view, fnId) {
-  const fn = view.graph.functions[fnId];
-  const groups = fn.branches
-    .map((branch, index) => ({ branch, index }))
-    .filter(({ branch }) => branch.shown && isActive(view, fnId, branch.path));
-  if (!groups.length) return '';
-
-  return `<div class="fp-section"><div class="label">You choose</div>${groups
-    .map(({ branch, index }) => {
-      const chosen = choiceOf(view, fnId, index);
-      return `<div class="choice">
-        <div class="choice-q">${question(branch)} <span class="muted">line ${branch.line}</span></div>
-        <div class="seg wrap">${branch.arms
-          .map(
-            (arm, a) => `<button class="${a === chosen ? 'on' : ''}" data-choice="${index}:${a}">${esc(
-              branch.kind === 'switch' ? arm.label.replace(/case /g, '') : arm.label
-            )}</button>`
-          )
-          .join('')}</div>
-      </div>`;
-    })
-    .join('')}</div>`;
-}
-
-function inputs(view, fnId) {
-  const fn = view.graph.functions[fnId];
-  const known = new Map();
-  fn.branches.forEach((branch, b) => {
-    if (branch.kind !== 'switch' || !isActive(view, fnId, branch.path)) return;
-    const arm = branch.arms[choiceOf(view, fnId, b)];
-    if (arm?.value !== undefined) known.set(branch.subject, arm.value);
-  });
-  if (!fn.params.length && !known.size) return '';
-
-  const rows = fn.params.map(
-    (p) => `<dt>${esc(p)}</dt><dd>${known.has(p) ? esc(known.get(p)) : '<span class="muted">any value</span>'}</dd>`
-  );
-  for (const [subject, value] of known) {
-    if (!fn.params.includes(subject)) rows.push(`<dt>${esc(subject)}</dt><dd>${esc(value)}</dd>`);
-  }
-  return `<div class="fp-section"><div class="label">Inputs</div><dl class="inputs">${rows.join('')}</dl></div>`;
-}
-
-function happens(view, step, next) {
-  const { graph } = view;
-  const fn = graph.functions[step.id];
-  const items = step.events
-    .map((i) => ({ event: fn.events[i], index: i }))
-    .filter(({ event }) => event.target)
-    .map(({ event, index }) => {
-      const leads = next?.via?.from === step.id && next.via.event === index;
-      return `<li class="${leads ? 'now' : ''}"><span class="verb">${event.type === 'throw' ? 'throws' : 'calls'}</span>
-        ${esc(graph.nodeById.get(event.target).name)}
-        ${event.label ? `<span class="cond">${esc(event.label)}</span>` : ''}</li>`;
-    });
-  if (step.stoppedEarly) {
-    items.push(`<li class="stop">it returns here, so the rest of this function does not run</li>`);
-  }
-  if (!items.length) return '';
-  return `<div class="fp-section"><div class="label">What happens here</div><ol class="fp-list">${items.join('')}</ol></div>`;
-}
-
-function simPanel(view) {
-  const { graph, steps } = view;
-  const step = steps[view.stepIndex];
-  const node = graph.nodeById.get(step.id);
-  const fn = graph.functions[step.id];
-  const next = steps[view.stepIndex + 1];
-
-  const head = `<div class="sim-top">
-      <span class="label">Step ${view.stepIndex + 1} of ${steps.length}</span>
-      <span class="label step-of">${esc(KIND[node.kind] ?? node.kind)}</span>
-    </div>
-    <h3 class="fp-name">${esc(node.name)}</h3>
-    <div class="fp-where">${esc(node.sub)}${node.changed ? ' · changed here' : ''}</div>
-    <div class="sim-nav">
-      <button class="btn" data-sim="prev" ${view.stepIndex === 0 ? 'disabled' : ''}>Back</button>
-      <button class="btn primary" data-sim="next" ${next ? '' : 'disabled'}>Next</button>
-      <span class="sim-next">${next ? `then <strong>${esc(graph.nodeById.get(next.id).name)}</strong>` : 'this is the end'}</span>
-    </div>`;
-
-  if (node.kind === 'error') {
-    return `${head}<p class="fp-text alert">The flow stops here with an error. Nothing after it runs, unless a caller catches it.</p>`;
-  }
-  if (node.kind === 'external') {
-    return `${head}<p class="fp-text">The code calls <strong>${esc(node.sub)}</strong>, outside your project.
-      When that is done it comes back and carries on.</p>`;
-  }
-  if (node.more) {
-    return `${head}<p class="fp-text">This one calls more code than this flow shows.</p>
-      <div class="fp-actions"><button class="btn" data-simulate="${esc(node.id)}">Simulate from here</button></div>
-      <div class="fp-section"><div class="label">The code</div>${codeBlock(fn, null, null)}</div>`;
-  }
-
-  const nowLine = next?.via?.from === step.id ? fn.events[next.via.event]?.line : null;
-  return `${head}
-    ${choices(view, step.id)}
-    ${inputs(view, step.id)}
-    ${happens(view, step, next)}
-    <div class="fp-section"><div class="label">The code</div>${codeBlock(fn, armMarks(view, step.id), nowLine)}</div>
-    <p class="fp-none" style="margin-top:14px">This follows the code as written. Nothing is run.</p>`;
+    <div class="fp-section"><div class="label">The code</div>${codeBlock(fn)}</div>`;
 }
 
 /* ---------- mounting ---------- */
 
 /**
- * Draw a flow into `host`. Options:
- *   mode     'explore' (default) or 'simulate'
- *   kicker   small label before the title, like "Flow" or "Part 2"
- *   title    big title; the first box's name when missing
- *   starts   [{ id, name }] other places this flow can start (shows a picker)
- *   onOpen   (id, mode) start the flow at another function
- *   onBack / onClose  show that button
+ * Draw a flow's boxes into `canvasEl` and its detail panel into `panelEl`.
+ * options.onOpen(id) is called when the reader asks to re-root the flow at a
+ * different function (the caller decides what that means: usually loading a
+ * new graph and mounting again).
  */
-export function mountFlow(host, graph, options = {}) {
+export function mountFlow(canvasEl, panelEl, graph, options = {}) {
   mounts += 1;
   const uid = mounts;
   graph.nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const edgeByEvent = new Map();
-  graph.edges.forEach((edge, i) => edge.events.forEach((event) => edgeByEvent.set(`${edge.from}#${event}`, i)));
 
   const placed = layout(graph);
   const anchor = anchors(graph);
-  const view = {
-    graph,
-    mode: options.mode === 'simulate' ? 'simulate' : 'explore',
-    selected: graph.entry,
-    choices: new Map(),
-    steps: [],
-    stepIndex: 0,
-    pos: placed.pos,
-    t: { x: 0, y: 0, k: 1 },
-  };
+  const view = { selected: graph.entry, pos: placed.pos, t: { x: 0, y: 0, k: 1 } };
 
-  const entry = graph.nodeById.get(graph.entry);
-  const starts = options.starts ?? [];
-  host.innerHTML = `<div class="flow">
-    <div class="flow-bar">
-      <div class="flow-title">
-        ${options.onBack ? '<button class="btn" data-back>Back</button>' : ''}
-        <span class="label">${esc(options.kicker ?? 'Flow')}</span>
-        <span class="flow-name">${esc(options.title ?? entry.name)}</span>
-        ${
-          starts.length > 1
-            ? `<label class="flow-start"><span class="label">starts at</span><select data-start>${starts
-                .map((s) => `<option value="${esc(s.id)}" ${s.id === graph.entry ? 'selected' : ''}>${esc(s.name)}</option>`)
-                .join('')}</select></label>`
-            : options.title
-              ? `<span class="flow-entry">${esc(entry.name)}</span>`
-              : ''
-        }
-      </div>
-      <div class="flow-tools">
-        <div class="seg">
-          <button data-mode="explore">Explore</button>
-          <button data-mode="simulate">Simulate</button>
-        </div>
-        <div class="seg zoomers">
-          <button data-zoom="out" aria-label="Zoom out">&minus;</button>
-          <button data-zoom="fit">Fit</button>
-          <button data-zoom="in" aria-label="Zoom in">+</button>
-        </div>
-        ${options.onClose ? '<button class="btn" data-close>Close</button>' : ''}
-      </div>
+  canvasEl.classList.add('flow-canvas');
+  canvasEl.innerHTML = `<div class="flow-world"></div>
+    <div class="flow-zoom">
+      <button data-zoom="out" aria-label="Zoom out">&minus;</button>
+      <button data-zoom="fit">Fit</button>
+      <button data-zoom="in" aria-label="Zoom in">+</button>
     </div>
-    <div class="flow-body">
-      <div class="flow-canvas"></div>
-      <aside class="flow-panel"></aside>
-    </div>
-  </div>`;
+    ${graph.truncated ? '<div class="flow-note">A big flow: some calls are not drawn. Open a box on its own to see more.</div>' : ''}
+    <div class="flow-hint">drag a box to move it</div>`;
+  const world = canvasEl.querySelector('.flow-world');
 
-  const root = host.querySelector('.flow');
-  const canvas = root.querySelector('.flow-canvas');
-  const panel = root.querySelector('.flow-panel');
-
-  /* ---- explore drawing ---- */
-
-  const worldHtml = () => `<svg class="flow-edges" width="${placed.width + BOX.w}" height="${placed.height + BOX.h * 2}">
+  world.innerHTML = `<svg class="flow-edges" width="${placed.width + BOX.w}" height="${placed.height + BOX.h * 2}">
       <defs>
         <marker id="a-${uid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path class="arrow" d="M0,0 L10,5 L0,10 z"></path>
@@ -573,9 +286,8 @@ export function mountFlow(host, graph, options = {}) {
         const label = edge.labels[0] ?? '';
         const extra = edge.labels.length > 1 ? ` +${edge.labels.length - 1}` : '';
         const short = label.length > 17 ? `${label.slice(0, 16)}…` : label;
-        const text = [edge.order > 1 || graph.edges.filter((e) => e.from === edge.from).length > 1 ? edge.order : '', short + extra]
-          .filter(Boolean)
-          .join(' · ');
+        const numbered = edge.order > 1 || graph.edges.filter((e) => e.from === edge.from).length > 1;
+        const text = [numbered ? edge.order : '', short + extra].filter(Boolean).join(' · ');
         return text
           ? `<span class="flabel" data-edge="${i}" title="${esc(edge.labels.join(' / '))}">${esc(text)}</span>`
           : '';
@@ -586,26 +298,25 @@ export function mountFlow(host, graph, options = {}) {
         (node) => `<button class="fnode k-${node.kind}${node.id === graph.entry ? ' entry' : ''}"
           data-id="${esc(node.id)}" style="width:${BOX.w}px;height:${BOX.h}px">
           ${nodeInner(node)}
-          ${node.more ? '<span class="fnode-more" title="It calls more. Open its own flow to see.">+</span>' : ''}
+          ${node.more ? '<span class="fnode-more" title="It calls more. Open it on its own to see.">+</span>' : ''}
         </button>`
       )
       .join('')}`;
 
   const placeAll = () => {
-    for (const el of canvas.querySelectorAll('.fnode')) {
+    for (const el of world.querySelectorAll('.fnode')) {
       const p = view.pos.get(el.dataset.id);
       el.style.left = `${p.x}px`;
       el.style.top = `${p.y}px`;
     }
-    drawEdges();
   };
 
   const drawEdges = () => {
     const lit = new Set();
-    for (const edge of graph.edges) {
-      if (edge.from === view.selected || edge.to === view.selected) lit.add(graph.edges.indexOf(edge));
-    }
-    for (const path of canvas.querySelectorAll('path.fedge')) {
+    graph.edges.forEach((edge, i) => {
+      if (edge.from === view.selected || edge.to === view.selected) lit.add(i);
+    });
+    for (const path of world.querySelectorAll('path.fedge')) {
       const i = Number(path.dataset.edge);
       const edge = graph.edges[i];
       const from = view.pos.get(edge.from);
@@ -616,29 +327,26 @@ export function mountFlow(host, graph, options = {}) {
       path.setAttribute('d', d);
       path.classList.toggle('lit', lit.has(i));
       path.setAttribute('marker-end', `url(#${lit.has(i) ? 'al' : 'a'}-${uid})`);
-      const label = canvas.querySelector(`.flabel[data-edge="${i}"]`);
+      const label = world.querySelector(`.flabel[data-edge="${i}"]`);
       if (label) {
         label.style.left = `${mid.x}px`;
         label.style.top = `${mid.y}px`;
         label.classList.toggle('lit', lit.has(i));
       }
     }
-    for (const el of canvas.querySelectorAll('.fnode')) {
+    for (const el of world.querySelectorAll('.fnode')) {
       el.classList.toggle('current', el.dataset.id === view.selected);
     }
   };
 
   const apply = () => {
-    const world = canvas.querySelector('.flow-world');
-    if (world) world.style.transform = `translate(${view.t.x}px, ${view.t.y}px) scale(${view.t.k})`;
+    world.style.transform = `translate(${view.t.x}px, ${view.t.y}px) scale(${view.t.k})`;
   };
 
   const fit = () => {
-    const rect = canvas.getBoundingClientRect();
-    const pad = 44;
-    // Never shrink past the point where the boxes stop being readable: a flow
-    // too wide for the window scrolls instead.
-    const k = Math.min(1.05, Math.max(0.78, Math.min((rect.width - pad * 2) / placed.width, (rect.height - pad * 2) / placed.height)));
+    const rect = canvasEl.getBoundingClientRect();
+    const pad = 40;
+    const k = Math.min(1.05, Math.max(0.7, Math.min((rect.width - pad * 2) / placed.width, (rect.height - pad * 2) / placed.height)));
     const wide = placed.width * k > rect.width - pad * 2;
     const tall = placed.height * k > rect.height - pad * 2;
     const start = view.pos.get(graph.entry);
@@ -650,123 +358,51 @@ export function mountFlow(host, graph, options = {}) {
     apply();
   };
 
-  /* ---- simulate drawing ---- */
-
-  const stripHtml = () => {
-    const parts = view.steps.map((step, i) => {
-      const node = graph.nodeById.get(step.id);
-      const box = `<button class="fnode k-${node.kind}${i === view.stepIndex ? ' current' : ''}${
-        i < view.stepIndex ? ' past' : ''
-      }" data-step="${i}">
-        <span class="no">${i + 1}</span>
-        ${nodeInner(node)}
-      </button>`;
-      const next = view.steps[i + 1];
-      if (!next) return box;
-      const fn = graph.functions[next.via.from];
-      const label = fn?.events[next.via.event]?.label ?? '';
-      return `${box}<span class="strip-link">
-        <span class="cap">${esc(label)}</span>
-        <span class="line"></span>
-      </span>`;
-    });
-
-    const last = graph.nodeById.get(view.steps[view.steps.length - 1].id);
-    const end = last.kind === 'error' ? 'it stops with an error' : 'nothing more to follow';
-    return `<div class="strip"><div class="strip-inner">${parts.join('')}<span class="strip-end">${end}</span></div></div>`;
+  /** Pan just enough to bring a box into view, without recentring one already visible. */
+  const reveal = (id) => {
+    const p = view.pos.get(id);
+    if (!p) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const x = p.x * view.t.k + view.t.x;
+    const y = p.y * view.t.k + view.t.y;
+    const w = BOX.w * view.t.k;
+    const h = BOX.h * view.t.k;
+    const pad = 16;
+    if (x >= pad && y >= pad && x + w <= rect.width - pad && y + h <= rect.height - pad) return;
+    view.t.x = rect.width / 2 - (p.x + BOX.w / 2) * view.t.k;
+    view.t.y = rect.height / 2 - (p.y + BOX.h / 2) * view.t.k;
+    apply();
   };
 
-  /* ---- render ---- */
-
-  const render = () => {
-    root.classList.toggle('sim', view.mode === 'simulate');
-    for (const button of root.querySelectorAll('[data-mode]')) {
-      button.classList.toggle('on', button.dataset.mode === view.mode);
-    }
-
-    if (view.mode === 'simulate') {
-      view.steps = simulate(view);
-      view.stepIndex = Math.min(view.stepIndex, view.steps.length - 1);
-      canvas.className = 'flow-canvas';
-      canvas.innerHTML = stripHtml();
-      panel.innerHTML = simPanel(view);
-      const current = canvas.querySelector('.fnode.current');
-      current?.scrollIntoView({ block: 'nearest', inline: 'center' });
-    } else {
-      canvas.className = 'flow-canvas pan';
-      canvas.innerHTML = `<div class="flow-world">${worldHtml()}</div>
-        ${graph.truncated ? '<div class="flow-note">A big flow: some calls are not drawn. Open a box\'s own flow to see more.</div>' : ''}
-        <div class="flow-hint">drag a box to move it</div>`;
-      placeAll();
-      panel.innerHTML = explorePanel(view);
-      apply();
-    }
-
-    const now = panel.querySelector('.cl.now') ?? panel.querySelector('.cl.on');
-    const code = now?.closest('.code');
-    if (now && code) code.scrollTop = Math.max(0, now.offsetTop - code.offsetTop - 60);
-  };
-
-  const goToStep = (index) => {
-    view.stepIndex = Math.max(0, Math.min(index, view.steps.length - 1));
-    render();
-    panel.scrollTop = 0;
+  const select = (id) => {
+    view.selected = id;
+    panelEl.innerHTML = detailPanel(graph, id);
+    panelEl.scrollTop = 0;
+    drawEdges();
   };
 
   /* ---- events ---- */
 
-  root.addEventListener('click', (event) => {
+  const onClick = (event) => {
     const target = event.target.closest('button');
     if (!target) return;
     const { dataset } = target;
 
-    if (dataset.mode) {
-      view.mode = dataset.mode;
-      if (dataset.mode === 'explore') requestAnimationFrame(fit);
-      render();
-    } else if (dataset.zoom) {
-      const rect = canvas.getBoundingClientRect();
+    if (dataset.zoom) {
+      const rect = canvasEl.getBoundingClientRect();
       if (dataset.zoom === 'fit') fit();
       else zoomAt(rect.width / 2, rect.height / 2, dataset.zoom === 'in' ? 1.2 : 1 / 1.2);
-    } else if ('close' in dataset) {
-      options.onClose?.();
-    } else if ('back' in dataset) {
-      options.onBack?.();
-    } else if (dataset.step !== undefined) {
-      goToStep(Number(dataset.step));
     } else if (dataset.id !== undefined) {
-      if (dragged) return;
-      view.selected = dataset.id;
-      panel.innerHTML = explorePanel(view);
-      panel.scrollTop = 0;
-      drawEdges();
+      if (!dragged) select(dataset.id);
     } else if (dataset.goto) {
-      view.selected = dataset.goto;
-      view.mode = 'explore';
-      render();
-      panel.scrollTop = 0;
+      select(dataset.goto);
+      reveal(dataset.goto);
     } else if (dataset.open) {
-      options.onOpen?.(dataset.open, 'explore');
-    } else if (dataset.simulate) {
-      if (dataset.simulate === graph.entry) {
-        view.mode = 'simulate';
-        view.stepIndex = 0;
-        render();
-      } else {
-        options.onOpen?.(dataset.simulate, 'simulate');
-      }
-    } else if (dataset.choice) {
-      const [branch, arm] = dataset.choice.split(':').map(Number);
-      view.choices.set(choiceKey(view.steps[view.stepIndex].id, branch), arm);
-      render();
-    } else if (dataset.sim) {
-      goToStep(view.stepIndex + (dataset.sim === 'next' ? 1 : -1));
+      options.onOpen?.(dataset.open);
     }
-  });
-
-  root.querySelector('[data-start]')?.addEventListener('change', (event) => {
-    options.onOpen?.(event.target.value, view.mode);
-  });
+  };
+  canvasEl.addEventListener('click', onClick);
+  panelEl.addEventListener('click', onClick);
 
   /* ---- drag a box, or pan the canvas ---- */
 
@@ -781,18 +417,22 @@ export function mountFlow(host, graph, options = {}) {
     apply();
   };
 
-  canvas.addEventListener('pointerdown', (event) => {
-    if (view.mode !== 'explore' || event.button !== 0) return;
+  canvasEl.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || event.target.closest('.flow-zoom')) return;
     const node = event.target.closest('.fnode');
     dragged = false;
     drag = node
       ? { node, id: node.dataset.id, x: event.clientX, y: event.clientY, start: { ...view.pos.get(node.dataset.id) } }
       : { x: event.clientX, y: event.clientY, tx: view.t.x, ty: view.t.y };
-    canvas.setPointerCapture(event.pointerId);
-    if (!node) canvas.classList.add('dragging');
+    try {
+      canvasEl.setPointerCapture(event.pointerId);
+    } catch {
+      /* the pointer can be gone by the time this runs; the drag still works without capturing it */
+    }
+    if (!node) canvasEl.classList.add('dragging');
   });
 
-  canvas.addEventListener('pointermove', (event) => {
+  canvasEl.addEventListener('pointermove', (event) => {
     if (!drag) return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
@@ -813,91 +453,41 @@ export function mountFlow(host, graph, options = {}) {
 
   const endDrag = () => {
     drag = null;
-    canvas.classList.remove('dragging');
+    canvasEl.classList.remove('dragging');
     // Let the click that follows a real drag pass, then allow clicks again.
     setTimeout(() => {
       dragged = false;
     }, 0);
   };
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  canvasEl.addEventListener('pointerup', endDrag);
+  canvasEl.addEventListener('pointercancel', endDrag);
 
-  canvas.addEventListener(
+  canvasEl.addEventListener(
     'wheel',
     (event) => {
-      if (view.mode !== 'explore') return;
       event.preventDefault();
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasEl.getBoundingClientRect();
       zoomAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY < 0 ? 1.1 : 1 / 1.1);
     },
     { passive: false }
   );
 
-  const onKey = (event) => {
-    if (view.mode !== 'simulate' || event.target.closest?.('input, select, textarea')) return;
-    if (event.key === 'ArrowRight') goToStep(view.stepIndex + 1);
-    if (event.key === 'ArrowLeft') goToStep(view.stepIndex - 1);
-  };
-  document.addEventListener('keydown', onKey);
-
-  render();
-  if (view.mode === 'explore') requestAnimationFrame(fit);
+  placeAll();
+  drawEdges();
+  select(graph.entry);
+  requestAnimationFrame(fit);
 
   return {
     destroy() {
-      document.removeEventListener('keydown', onKey);
-      host.innerHTML = '';
+      canvasEl.innerHTML = '';
+      panelEl.innerHTML = '';
     },
   };
 }
-
-/* ---------- opening a flow ---------- */
 
 export function flowUrl(id, { story, depth } = {}) {
   const params = new URLSearchParams({ id });
   if (story) params.set('story', story);
   if (depth) params.set('depth', String(depth));
   return `/api/flow/graph?${params}`;
-}
-
-/** A flow over the whole page, for one part of a change. Esc or Close ends it. */
-export function openFlowOverlay({ kicker, title, starts, storyId, mode = 'simulate' }) {
-  const layer = document.createElement('div');
-  layer.className = 'flow-overlay';
-  layer.setAttribute('role', 'dialog');
-  layer.setAttribute('aria-label', title ?? 'Flow');
-  document.body.append(layer);
-  document.body.classList.add('overlay-open');
-
-  let mounted = null;
-  const close = () => {
-    mounted?.destroy();
-    layer.remove();
-    document.body.classList.remove('overlay-open');
-    document.removeEventListener('keydown', onKey);
-  };
-  const onKey = (event) => {
-    if (event.key === 'Escape') close();
-  };
-  document.addEventListener('keydown', onKey);
-
-  const open = async (id, openMode) => {
-    mounted?.destroy();
-    mounted = null;
-    layer.innerHTML = '<div class="empty">Reading the code…</div>';
-    try {
-      const graph = await getJson(flowUrl(id, { story: storyId }));
-      mounted = mountFlow(layer, graph, { mode: openMode, kicker, title, starts, onOpen: open, onClose: close });
-    } catch (error) {
-      layer.innerHTML = `<div class="empty">
-        <h2>That flow did not load</h2>
-        <p class="mono">${esc(error.message || error)}</p>
-        <button class="btn" data-close>Close</button>
-      </div>`;
-      layer.querySelector('[data-close]').addEventListener('click', close);
-    }
-  };
-
-  open(starts[0].id, mode);
-  return { close };
 }

@@ -10,10 +10,11 @@ Plain list. No promises, just where things really are.
 |---|---|
 | **Catching changes** | When your AI finishes a job, Twomind sees which files changed. Works in Claude Code and Codex. It never touches your git. |
 | **The AI explains itself** | The AI writes down what it did, why, and how to test it. It also says which files matter most. If it forgets, Twomind asks once. |
-| **The guided story** | The AI tells the change as 1 to 6 chapters. Three levels: Story, Story + code, Everything. Twomind checks the AI's file names and line numbers against the real change. |
-| **Flows** | Pick any function and see a map of it: boxes for what it calls, dashed lines, and the condition on each line (`case DONE`, `if !ticket`). Read with a real parser, not text patterns. JavaScript and TypeScript. |
-| **Simulation** | Walk one path through the code, step by step. Choose a switch case, an if, or "it fails", and see where the code goes. Works in the code map and on every chapter of a story. |
+| **The guided story** | The AI tells the change as 1 to 6 chapters, each one a walkthrough: a plain sentence, then just the lines it is about, then the next sentence. Twomind checks the AI's file names and line numbers against the real change. |
+| **Function boxes** | A file with no walkthrough is split at its real function boundaries (read with a parser) into collapsed boxes, instead of one long dump of code. |
+| **Flows** | Pick any function in the Code map and see it as boxes and arrows: what it calls, and the condition on each line (`case DONE`, `if !ticket`). Read with a real parser, not text patterns. JavaScript and TypeScript. |
 | **No guessing** | Twomind writes no sentences by itself. If the AI did not explain something, the screen says so. A call the parser cannot follow is left out, not guessed. |
+| **Readable code** | Every code panel is coloured (keywords, strings, numbers, comments), not a wall of one colour. |
 | **`record`** | For tools without hooks (Cursor and others). The AI writes its note, then runs one command. |
 | **The dashboard** | Three screens: Catch up, Changes, Code map. Updates by itself. Dark and light. |
 | **The look** | A written rule book (`docs/DESIGN.md`), and the screens follow it. |
@@ -31,9 +32,9 @@ Right now a forgetful AI leaves an empty entry.
 - Warn the AI at the **start** of the job, not only at the end.
 - `twomind explain`: you run it, and the AI explains an old change it forgot.
 
-### 2. Flows for more languages
-Python first, then Java and C#. The simulation panel does not need to change,
-only a new reader per language.
+### 2. Flows and function boxes for more languages
+Python first, then Java and C#. The screens do not need to change, only a
+new reader per language.
 
 ### 3. Teach the project files to grow
 The `.twomind/project/` files are written once and never change again.

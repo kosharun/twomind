@@ -80,7 +80,6 @@ export function setScreen(html) {
   const screen = $('#screen');
   leaving?.();
   leaving = null;
-  screen.classList.remove('full');
   screen.innerHTML = html;
   screen.scrollTop = 0;
 }

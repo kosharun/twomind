@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { changedLinesByFile } from './diffparse.js';
-import type { AgentNote, NoteChapter, NoteLevel } from './note.js';
+import type { AgentNote, NoteChapter, NoteLevel, NoteStep } from './note.js';
 import { slashPath } from './note.js';
 import type { DiffResult, FileChange } from './snapshot.js';
 import { resolveProjectPaths } from './paths.js';
@@ -44,6 +44,15 @@ export interface StoryGroup {
 /** Where the explanation came from. Shown to the owner, never hidden. */
 export type ExplainedBy = 'agent-note' | 'agent-message' | 'none';
 
+/** One narrated beat of a chapter: a sentence, and the lines it is about. */
+export interface StoryStep {
+  say: string;
+  /** Null when the agent's file could not be matched to the real diff. */
+  file: string | null;
+  /** Null when there is no code for this beat, so it shows as words alone. */
+  lines: Array<[number, number]> | null;
+}
+
 /** One part of the agent's story of a change. */
 export interface StoryChapter {
   title: string;
@@ -52,8 +61,8 @@ export interface StoryChapter {
   files: string[];
   /** Line ranges per file, kept only where they touch lines that really changed. */
   lines: Record<string, Array<[number, number]>>;
-  /** The function the agent says this part starts at. Checked against the code when a flow opens. */
-  entry: string;
+  /** The chapter told slowly. Empty when the agent skipped it; the file list above still holds. */
+  steps: StoryStep[];
 }
 
 export interface StoryMeta {
@@ -152,6 +161,31 @@ function parseRanges(spec: string): Array<[number, number]> {
   return ranges;
 }
 
+/** A line range survives only if it touches a line that really changed, with a little slack. */
+function keepTouchedRanges(spec: string, touched: number[]): Array<[number, number]> {
+  return parseRanges(spec).filter(([from, to]) => touched.some((n) => n >= from - 3 && n <= to + 3));
+}
+
+/**
+ * Check one step against the real diff: resolve its file (falling back to the
+ * previous step's file, so the agent can leave it out once it has said which
+ * file it is on), and keep only the lines that really changed there.
+ */
+function resolveStep(
+  step: NoteStep,
+  prevFile: string | null,
+  diff: DiffResult,
+  changed: Map<string, Set<number>>
+): StoryStep {
+  const say = clean(step.say);
+  const wanted = step.file || prevFile || '';
+  const real = wanted ? diff.files.find((f) => samePath(f.path, wanted)) : undefined;
+  if (!real) return { say, file: null, lines: null };
+
+  const kept = step.lines ? keepTouchedRanges(step.lines, [...(changed.get(real.path) ?? [])]) : [];
+  return { say, file: real.path, lines: kept.length ? kept : null };
+}
+
 /**
  * Keep the agent's chapters honest: files must be in the real diff, and a line
  * range survives only if it touches a line that really changed (with a few
@@ -175,10 +209,21 @@ function buildChapters(chapters: NoteChapter[], diff: DiffResult): StoryChapter[
     for (const [wanted, spec] of Object.entries(chapter.lines)) {
       const real = diff.files.find((f) => samePath(f.path, wanted));
       if (!real) continue;
-      const touched = [...(changed.get(real.path) ?? [])];
-      const kept = parseRanges(spec).filter(([from, to]) => touched.some((n) => n >= from - 3 && n <= to + 3));
+      const kept = keepTouchedRanges(spec, [...(changed.get(real.path) ?? [])]);
       if (kept.length) lines[real.path] = kept;
       if (!files.includes(real.path)) files.push(real.path);
+    }
+
+    let prevFile: string | null = null;
+    const steps: StoryStep[] = [];
+    for (const step of chapter.steps) {
+      const resolved = resolveStep(step, prevFile, diff, changed);
+      if (!resolved.say) continue;
+      if (resolved.file) {
+        prevFile = resolved.file;
+        if (!files.includes(resolved.file)) files.push(resolved.file);
+      }
+      steps.push(resolved);
     }
 
     return {
@@ -186,7 +231,7 @@ function buildChapters(chapters: NoteChapter[], diff: DiffResult): StoryChapter[
       what: clean(chapter.what),
       files,
       lines,
-      entry: clean(chapter.entry),
+      steps,
     };
   });
 }
@@ -343,6 +388,10 @@ export function renderMarkdown(meta: StoryMeta): string {
     meta.chapters.forEach((chapter, i) => {
       lines.push(`### ${i + 1}. ${chapter.title || 'Untitled part'}`, '');
       if (chapter.what) lines.push(chapter.what, '');
+      for (const step of chapter.steps) {
+        lines.push(`- ${step.say}${step.file ? ` (\`${step.file}\`)` : ''}`);
+      }
+      if (chapter.steps.length) lines.push('');
       if (chapter.files.length) lines.push(`Files: ${chapter.files.map((f) => `\`${f}\``).join(', ')}`, '');
     });
   }

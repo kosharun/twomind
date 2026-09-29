@@ -36,18 +36,21 @@ Your agent already has a memory. You do not.
 
 ## What this does
 
-**1. The agent explains every change, as a short story.** When your agent
-finishes a job, it writes a note: what it did, why, how to test it, and the story
-of the change in 1 to 6 chapters. A chapter can cover many files, so 10 changed
-files can read as 3 short paragraphs. Twomind attaches the real diff and checks
-the agent's file names and line numbers against it. If the agent explains
-nothing, the screen says so. Twomind never makes up an explanation.
+**1. The agent walks you through every change.** When your agent finishes a
+job, it writes a note: what it did, why, how to test it, and the story of the
+change in 1 to 6 chapters. Open a chapter and it plays back like someone
+sitting next to you: one short sentence, then just the few lines it is about,
+then the next sentence. Twomind checks the agent's file names and line
+numbers against the real diff; a claim that does not match the code is
+dropped, never shown as fact. If the agent explains nothing, the screen says
+so, and never makes up an explanation of its own.
 
-Read a change at three levels: **Story** (the words), **Story + code** (each
-chapter with the lines it talks about), or **Everything** (every file).
+A file with no walkthrough is never dumped whole. It is split at its real
+function boundaries, read with a parser, each one collapsed to its name until
+you open it, so a 100-line file reads as half a dozen short, labelled pieces.
 
-**2. Flows you can walk through.** Pick any function and see it as a map: boxes
-for what it calls, dashed lines, and the condition on each line.
+**2. A code map you can click through.** Search any function or route and see
+it as boxes and arrows: what it calls, and the condition on each line.
 
 ```
 PATCH /tickets/:id/status
@@ -58,9 +61,9 @@ PATCH /tickets/:id/status
     4  save()  ->  Pool.query()                (outside the project)
 ```
 
-Press **Simulate** to walk one path step by step: choose `status = DONE`, or
-"the ticket does not exist", and see where the code goes, with the code of each
-step next to it. Every story chapter about code has the same button.
+Click a box for its code and what it calls; drag one if two arrows overlap.
+It opens on the same page, next to the rest of the map, never as a separate
+screen.
 
 Flows are read with a real parser (JavaScript and TypeScript for now). They
 follow imports, `require`, classes and typed fields like `this.repo`. Nothing is
@@ -165,7 +168,7 @@ npm test        # builds, then checks the flow reader on a sample project
 
 ## Status
 
-Early. Capture, stories with chapters, flows, simulation and catch-up are built.
+Early. Capture, the guided walkthrough, flows and catch-up are built.
 See [docs/ROADMAP.md](docs/ROADMAP.md) for what is next, and
 [RESEARCH.md](RESEARCH.md) for the evidence behind it.
 

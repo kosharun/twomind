@@ -194,7 +194,11 @@ Before creating a new function, component or helper, search for an existing one 
   "summary": "2-4 short, plain sentences: what changed and why",
   "chapters": [
     { "title": "short name for one part", "what": "1-3 plain sentences about this part",
-      "files": ["exact/path"], "lines": { "exact/path": "12-40" }, "entry": "function where this part starts" }
+      "files": ["exact/path"],
+      "steps": [
+        { "say": "one short, plain sentence: what happens first", "file": "exact/path", "lines": "12-18" },
+        { "say": "the next sentence, once the reader has seen that", "lines": "20-24" }
+      ] }
   ],
   "howToTest": ["step 1", "step 2"],
   "files": [{ "path": "exact/path", "level": "start | important | small", "why": "one sentence" }],
@@ -206,7 +210,12 @@ Before creating a new function, component or helper, search for an existing one 
 List every file you changed. You decide the level: "start" = the heart of the change
 (1-3 files), "important" = worth reading, "small" = a minor follow-up. Use simple words.
 "chapters" tell the change as a story, in reading order: 1 for a small change, up to 6 for a
-big one. One chapter can cover many files. "lines" and "entry" are optional.
+big one. One chapter can cover many files.
+
+Give each chapter "steps": walk the owner through its code slowly, one plain sentence at a
+time, each one pointing at just the few lines it is talking about. This is the part that
+matters most: do not only name a file, guide the owner through it like you are sitting next
+to them. The first step needs "file"; later steps can leave it out to stay on the same file.
 
 Claude Code and Codex save the note by themselves. In any other tool, run this after
 writing the note: \`${recordCommand}\`

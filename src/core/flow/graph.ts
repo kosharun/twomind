@@ -5,7 +5,7 @@ import type { ArmRef, FlowBranch, FlowEvent, FlowFunction } from './types.js';
 
 /**
  * One function as a flow: the boxes it reaches, the calls between them, and
- * the condition on each call. This is what the dashboard draws and simulates.
+ * the condition on each call. This is what the Code map draws.
  */
 
 export type NodeKind = FlowFunction['kind'] | 'external' | 'error';
@@ -49,7 +49,7 @@ export interface EventView {
 }
 
 export interface BranchView extends FlowBranch {
-  /** Worth a choice in the simulation: an arm leads somewhere, or stops the function. */
+  /** An arm worth mentioning: it leads somewhere, or it stops the function. */
   shown: boolean;
 }
 
@@ -92,13 +92,15 @@ const MAX_LABEL = 44;
 
 export function displayName(fn: FlowFunction): string {
   if (fn.route) return fn.route;
-  if (fn.name === '(top level)') return `${path.posix.basename(fn.file)}, top level`;
+  if (fn.name === '(top level)') return path.posix.basename(fn.file);
   return `${fn.name}()`;
 }
 
 function subText(project: FlowProject, fn: FlowFunction): string {
   const file = path.posix.basename(fn.file);
   if (fn.route && fn.name !== fn.route) return `${fn.owner ?? ''}.${fn.name}() · ${file}`;
+  // The name already shows the file for this one, so the sub line says what it is instead.
+  if (fn.name === '(top level)') return 'runs when the file loads';
   if (fn.parent) {
     const parent = project.functions.get(fn.parent);
     return `inside ${parent ? displayName(parent) : 'a function'} · ${file}`;

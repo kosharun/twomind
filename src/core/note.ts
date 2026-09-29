@@ -24,6 +24,18 @@ export interface NoteFile {
   why: string;
 }
 
+/**
+ * One narrated beat inside a chapter: a plain sentence, and the few lines of
+ * code it is about. This is what turns "here is a file" into a guided tour.
+ */
+export interface NoteStep {
+  say: string;
+  /** Which file this beat is about. Optional after the first step: it stays on the same file until told otherwise. */
+  file: string;
+  /** "12-18", as the agent wrote it. Checked against the diff later. */
+  lines: string;
+}
+
 /** One part of the story. A chapter can cover many files. */
 export interface NoteChapter {
   title: string;
@@ -31,8 +43,8 @@ export interface NoteChapter {
   files: string[];
   /** path -> "12-40" or "12-40, 55-60", as the agent wrote it. Checked against the diff later. */
   lines: Record<string, string>;
-  /** Where this part starts in the code, like "login" or "TicketService.changeStatus". */
-  entry: string;
+  /** The chapter told slowly: a sentence, then a few lines, then the next sentence. */
+  steps: NoteStep[];
 }
 
 export interface AgentNote {
@@ -88,6 +100,17 @@ function asLineMap(value: unknown): Record<string, string> {
   return out;
 }
 
+function asSteps(value: unknown): NoteStep[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Array<Record<string, unknown>>)
+    .map((s) => ({
+      say: asText(s?.say ?? s?.text),
+      file: normaliseNotePath(asText(s?.file)),
+      lines: asText(s?.lines),
+    }))
+    .filter((s) => s.say);
+}
+
 function asChapters(value: unknown): NoteChapter[] {
   if (!Array.isArray(value)) return [];
   return (value as Array<Record<string, unknown>>)
@@ -96,7 +119,7 @@ function asChapters(value: unknown): NoteChapter[] {
       what: asText(c?.what ?? c?.summary ?? c?.text),
       files: asList(c?.files).map(normaliseNotePath),
       lines: asLineMap(c?.lines),
-      entry: asText(c?.entry ?? c?.start),
+      steps: asSteps(c?.steps),
     }))
     .filter((c) => c.title || c.what);
 }
@@ -166,7 +189,11 @@ export const NOTE_TEMPLATE = `{
   "summary": "2-4 short sentences: what changed and why",
   "chapters": [
     { "title": "short name for one part", "what": "1-3 plain sentences about this part",
-      "files": ["exact/path"], "lines": { "exact/path": "12-40" }, "entry": "function where this part starts" }
+      "files": ["exact/path"],
+      "steps": [
+        { "say": "one short, plain sentence: what happens first", "file": "exact/path", "lines": "12-18" },
+        { "say": "the next sentence, once the reader has seen that" , "lines": "20-24" }
+      ] }
   ],
   "howToTest": ["step 1", "step 2"],
   "files": [{ "path": "exact/path/from/the/list", "level": "start | important | small", "why": "one sentence" }],
@@ -192,7 +219,10 @@ export function askForNoteMessage(
     `"start" = the heart of the change, read first (1-3 files). "important" = worth reading. "small" = a minor follow-up change.`,
     `"why" = why that file changed, in one sentence.`,
     `"chapters" = the story of the change in reading order: 1 chapter for a small change, up to 6 for a big one.`,
-    `One chapter can cover many files. "lines" and "entry" are optional.`,
+    `One chapter can cover many files. Give each chapter "steps": walk the reader through its code slowly,`,
+    `one plain sentence at a time, each pointing at a few lines. This is the important part: do not just`,
+    `name the file, guide the reader through it like you are sitting next to them. The first step of a`,
+    `chapter needs "file"; later steps can leave it out to stay on the same file.`,
     `Write it for the owner like this: ${explanationStyle()}`,
     `Changed files:`,
     ...lines,

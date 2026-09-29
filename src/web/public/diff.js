@@ -1,4 +1,4 @@
-import { esc } from './ui.js';
+import { highlight } from './highlight.js';
 
 /* Rendering a diff. Deliberately quiet: a diff is a record, not a traffic light,
    so the colours are muted and the line numbers sit back.
@@ -32,7 +32,7 @@ function row(line) {
   const sign = line.type === 'add' ? '+' : line.type === 'del' ? '−' : ' ';
   const number = line.type === 'hunk' ? '' : (line.type === 'del' ? line.oldNo : line.newNo) ?? '';
   return `<div class="diff-line ${line.type}"><span class="no">${number}</span><span class="sign">${sign}</span><span class="src">${
-    esc(line.text) || ' '
+    highlight(line.text) || ' '
   }</span></div>`;
 }
 

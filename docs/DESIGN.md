@@ -11,10 +11,10 @@ code took**. So the interface borrows from transit signage: subway maps, station
 boards, platform signs.
 
 - a change is a **route**, and each file is a **station** on it
-- a story is one **line** with numbered **stops**: its chapters
+- a story is one **line** with numbered **stops**: its chapters, told as a
+  guided walkthrough, a sentence and then the few lines it is about
 - a flow is a **line diagram**: boxes are functions, dashed lines are calls, and
   the tag on a line says **when** that call happens (`case DONE`, `if !ticket`)
-- a simulation is **one straight line** of the steps that really run
 - two coloured lines run through everything: **cyan is you, lilac is the AI**
 
 Transit signage is built for someone glancing at it while moving. That is exactly
@@ -63,9 +63,11 @@ Cool and blue-black, like a station board at night.
 ```
 
 **Rules**
-- Cyan is only ever you: your prompt, where you are, the path you are walking in
-  a simulation, the button you would press next.
-- Lilac is only ever the AI's words: what it said, decided, ranked.
+- Cyan is only ever you: your prompt, where you are, the button you would
+  press next.
+- Lilac is only ever the AI's words: what it said, decided, ranked. Every
+  sentence in a guided walkthrough is lilac, because every one of them is the
+  AI talking, not Twomind.
 - Coral means *you need to look at this*: an error box, an unexplained file.
   Never decoration.
 - Green is only added code and the "changed" tag.
@@ -107,6 +109,10 @@ if it does not fit, it scrolls.
 sets padding and a border. A diff line's text span is `.src` for exactly that
 reason: the two collided once and double-spaced every diff on the page.
 
+**Code is coloured**, by `highlight.js`, with its own five tokens
+(`--code-kw`, `--code-str`, `--code-num`, `--code-com`, `--code-fn`), kept apart
+from `--you` and `--agent` on purpose: a keyword is not a voice.
+
 ---
 
 ## 5. Shape: circles, bars, boxes, dashed lines
@@ -123,9 +129,18 @@ reason: the two collided once and double-spaced every diff on the page.
   where the flow starts, or where you are.
 - **Flow lines:** dashed, with an arrow. The tag on a line is `--mono` in a thin
   box: the order number and the condition.
-- **Step numbers:** cyan circles on the corner of each box the simulation visits.
 - **Draggable:** a box in a flow can be dragged. Overlapping arrows are a fact of
   real code, so the reader is given a way to pull them apart.
+- **A call, a caller:** shown as a small pill (`--mono`, bordered), not a
+  sentence. Click one to jump to that box. A pill for a thrown error has a
+  coral border.
+- **Tiles:** a function, a route or a search hit is a small clickable box in a
+  grid, not a row of text: a kind label, the name, the file. Used on the Code
+  map's home screen and its search results.
+- **Function boxes in code:** a file's diff is split at its real function
+  boundaries (a fact read with a parser), each one collapsed to its name
+  until opened. Twomind never writes what a function does; only where it
+  starts and ends.
 
 Corner radius: `0` on panels and boxes, `999px` on dots and badges. Nothing in
 between. Borders: `1px` or `1.5px solid var(--track)`. Shadows: none, ever.
@@ -145,17 +160,20 @@ the space beside it holds the thing the reader would go looking for next:
 
 | Screen | Left | Right |
 |---|---|---|
-| A change | the story: what you asked, what the AI says, the parts | the code of the part you picked |
-| A flow | the picture, or the simulated line | the panel: choices, what happens, the code |
+| A change | the story: what you asked, what the AI says, the parts | the guided walkthrough, or the file split by function |
+| Code map | a search, and grids of tiles | (a function opens a bounded box below, not a new screen) |
 | Catch up | what is worth opening | where the work was |
 
-The code side is never less than 400px and takes about 40% of the window, since
+A flow opens as a bounded box on the page, never the whole screen: the
+sidebar and the rest of the map stay where they were. Its own two columns are
+the picture on the left and a panel on the right (never under 300px), since
 code cannot wrap.
 
 **Never show a whole file.** A diff shows about 22 lines and then offers the
-rest. A chapter with line numbers shows only those lines, with "Whole file" one
-click away. A list of more than a dozen rows shows the first few and offers the
-rest.
+rest. A guided walkthrough shows only the lines each sentence is about. A file
+with no walkthrough is split into its functions, collapsed until opened, with
+"Show the whole file instead" one click away. A list of more than a dozen
+tiles shows the first few and offers the rest.
 
 ---
 
@@ -163,7 +181,6 @@ rest.
 
 - Arrive: `opacity` + `translateY(10px)`, `380ms cubic-bezier(.2,.8,.2,1)`,
   stagger `50ms`, stop staggering after 6.
-- The path a simulation walks has marching dashes, so you can see its direction.
 - Everything else: `130ms ease` on colour, border and background only.
 - Never animate size or position on hover. Never spin. Never bounce.
 - `prefers-reduced-motion: reduce` stops all of it.
@@ -192,7 +209,9 @@ rest.
 - Colour never carries meaning alone: a dot or a box always has a word next to it.
 - Focus ring: `2px solid var(--you)`, `outline-offset: 2px`.
 - Collapsible headers are `<button>` with `aria-expanded`.
-- The simulation works from the keyboard: left and right arrows step through it.
+- The scrollbar is drawn to match the page (`scrollbar-width` and
+  `::-webkit-scrollbar`), everywhere something scrolls. A default OS scrollbar
+  is the one thing on the page that never learned the rest of the standard.
 
 ---
 
@@ -200,8 +219,9 @@ rest.
 
 - Plain ES modules, plain CSS. **No framework, no build step** for the dashboard.
   Someone should be able to edit one file and reload.
-- One module per screen in `web/public/`. `flow.js` is the one shared drawing
-  (the code map and a story's simulation both use it).
+- One module per screen in `web/public/`. `flow.js` draws the boxes and
+  arrows for the Code map; `highlight.js` colours code and is shared by every
+  screen that shows any.
 - Every design value is a CSS custom property. Never a hard-coded colour.
 - **Every screen must handle failure.** A screen that cannot load says what broke
   and offers a retry. A screen must never sit on a loading message forever.
