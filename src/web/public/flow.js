@@ -166,6 +166,41 @@ function codeBlock(fn) {
   return renderLines(fn.code, { startAt: fn.line, changed: new Set(fn.changedLines) });
 }
 
+/** The same code, in a big centred window, for when the small panel is too cramped to read. */
+function openCodeModal(graph, id) {
+  const node = graph.nodeById.get(id);
+  const fn = graph.functions[id];
+  if (!node || !fn) return;
+
+  const modal = document.createElement('div');
+  modal.className = 'code-modal-backdrop';
+  modal.innerHTML = `<div class="code-modal">
+    <div class="code-modal-head">
+      <div>
+        <div class="fp-name" style="margin:0">${esc(node.name)}</div>
+        <div class="fp-where">${esc(node.sub)}${node.line ? `, line ${node.line}` : ''}</div>
+      </div>
+      <button class="btn" data-close-code>Close</button>
+    </div>
+    <div class="code-modal-body">${codeBlock(fn)}</div>
+  </div>`;
+  document.body.append(modal);
+  document.body.classList.add('overlay-open');
+
+  const close = () => {
+    modal.remove();
+    document.body.classList.remove('overlay-open');
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (event) => {
+    if (event.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal || event.target.closest('[data-close-code]')) close();
+  });
+}
+
 function kindLine(node) {
   return `<div class="fp-kind">${KIND_LABEL[node.kind] ?? node.kind}${
     node.changed ? ' <span class="fp-changed">changed here</span>' : ''
@@ -239,7 +274,13 @@ function detailPanel(graph, selectedId) {
             .join('')}</div></div>`
         : ''
     }
-    <div class="fp-section"><div class="label">The code</div>${codeBlock(fn)}</div>`;
+    <div class="fp-section">
+      <div class="fp-section-head">
+        <div class="label">The code</div>
+        <button class="btn small" data-open-code="${esc(fn.id)}">Open full screen</button>
+      </div>
+      ${codeBlock(fn)}
+    </div>`;
 }
 
 /* ---------- mounting ---------- */
@@ -399,6 +440,8 @@ export function mountFlow(canvasEl, panelEl, graph, options = {}) {
       reveal(dataset.goto);
     } else if (dataset.open) {
       options.onOpen?.(dataset.open);
+    } else if (dataset.openCode) {
+      openCodeModal(graph, dataset.openCode);
     }
   };
   canvasEl.addEventListener('click', onClick);
@@ -417,26 +460,49 @@ export function mountFlow(canvasEl, panelEl, graph, options = {}) {
     apply();
   };
 
+  // Two separate bugs lived here, and both had to go before a plain click
+  // worked again:
+  //
+  // 1. A mouse click always drifts a pixel or two between button-down and
+  //    button-up. Moving a box on every one of those pixels meant the drift
+  //    alone counted as a drag. Fixed by waiting for a real move (past
+  //    DRAG_THRESHOLD) before anything is treated as a drag at all.
+  //
+  // 2. The bigger one: capturing the pointer on every mousedown, even a
+  //    plain click, tells the browser "all of this pointer's events, and the
+  //    click built from them, belong to the canvas now", not to the box you
+  //    pressed. So the click handler's `event.target` was the canvas, never
+  //    the box, and `select()` never ran for a real mouse (only the
+  //    keyboard's own Space-to-click on the focused button still worked,
+  //    since that never goes through pointer capture). Fixed by only taking
+  //    capture once a drag has actually started.
+  const DRAG_THRESHOLD = 6;
+
   canvasEl.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || event.target.closest('.flow-zoom')) return;
     const node = event.target.closest('.fnode');
     dragged = false;
     drag = node
-      ? { node, id: node.dataset.id, x: event.clientX, y: event.clientY, start: { ...view.pos.get(node.dataset.id) } }
-      : { x: event.clientX, y: event.clientY, tx: view.t.x, ty: view.t.y };
-    try {
-      canvasEl.setPointerCapture(event.pointerId);
-    } catch {
-      /* the pointer can be gone by the time this runs; the drag still works without capturing it */
-    }
-    if (!node) canvasEl.classList.add('dragging');
+      ? { node, id: node.dataset.id, x: event.clientX, y: event.clientY, start: { ...view.pos.get(node.dataset.id) }, pointerId: event.pointerId }
+      : { x: event.clientX, y: event.clientY, tx: view.t.x, ty: view.t.y, pointerId: event.pointerId };
   });
 
   canvasEl.addEventListener('pointermove', (event) => {
     if (!drag) return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) dragged = true;
+
+    if (!dragged) {
+      if (Math.abs(dx) + Math.abs(dy) <= DRAG_THRESHOLD) return;
+      dragged = true;
+      try {
+        canvasEl.setPointerCapture(drag.pointerId);
+      } catch {
+        /* the pointer can be gone by the time this runs; the drag still works without capturing it */
+      }
+      if (drag.node) drag.node.classList.add('dragging-node');
+      else canvasEl.classList.add('dragging');
+    }
 
     if (drag.node) {
       view.pos.set(drag.id, { x: drag.start.x + dx / view.t.k, y: drag.start.y + dy / view.t.k });
@@ -452,6 +518,7 @@ export function mountFlow(canvasEl, panelEl, graph, options = {}) {
   });
 
   const endDrag = () => {
+    drag?.node?.classList.remove('dragging-node');
     drag = null;
     canvasEl.classList.remove('dragging');
     // Let the click that follows a real drag pass, then allow clicks again.

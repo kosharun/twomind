@@ -64,6 +64,7 @@ body {
   line-height: 1.62;
   -webkit-font-smoothing: antialiased;
 }
+body.overlay-open { overflow: hidden; }
 
 ::selection { background: var(--you); color: var(--void); }
 a { color: var(--you); }
@@ -101,6 +102,7 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .btn:disabled { opacity: 0.35; cursor: default; }
 .btn.primary { background: var(--you); border-color: var(--you); color: var(--void); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.small { padding: 3px 9px; font-size: 11.5px; }
 
 .seg { display: inline-flex; border: 1px solid var(--track); }
 .seg.wrap { flex-wrap: wrap; }
@@ -221,7 +223,7 @@ h1.title {
 
 /* ---------- a change: reading column, then code column ---------- */
 
-.story { display: grid; grid-template-columns: minmax(400px, 34%) 1fr; height: 100%; }
+.story { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(380px, 1fr); height: 100%; }
 .story-read { overflow-y: auto; padding: 28px 30px 80px; border-right: 1px solid var(--track); }
 .story-code { overflow: hidden; display: flex; flex-direction: column; background: var(--surface); }
 
@@ -241,6 +243,34 @@ h1.title {
 .say .more {
   background: none; border: none; color: var(--you); cursor: pointer;
   font: inherit; font-size: 12.5px; padding: 3px 0 0 16px;
+}
+
+/* You asked / what the AI did: real, but background information. Kept small
+   on purpose, so the story below does not have to compete with it. */
+.context { margin-bottom: 6px; }
+.context .say { margin-bottom: 10px; }
+.context .say-body { font-size: 13px; padding: 1px 0 1px 11px; border-left-width: 2px; }
+.context .say.ai .say-body { font-size: 13.5px; }
+
+/* A section that starts closed: worth having, not worth competing for your eyes. */
+.collapse { margin-bottom: 14px; }
+.collapse-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 5px 0;
+}
+.collapse-head:hover .label { color: var(--chalk-2); }
+.collapse-head .caret { font-size: 9px; color: var(--chalk-3); transition: transform 0.12s ease; }
+.collapse-head .label { margin: 0; }
+.collapse.open .collapse-head .caret { transform: rotate(90deg); }
+.collapse-body { display: none; padding: 10px 0 0 17px; }
+.collapse.open .collapse-body { display: block; }
+
+/* The story is the point of this screen, so its heading is the loudest thing
+   on the page after the title: bigger, bold, in the AI's own colour. */
+.story-label {
+  font-family: var(--sans); font-weight: 700; font-size: 13.5px;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--agent);
+  margin-bottom: 14px;
 }
 
 .steps { list-style: none; counter-reset: s; }
@@ -343,11 +373,22 @@ h1.title {
 .chunk-all:hover { color: var(--you); }
 .also-in-part { margin-top: 22px; }
 
-/* The guided walkthrough: a sentence, then just the code it is about. */
-.walk { display: flex; flex-direction: column; gap: 4px; }
-.beat { margin-bottom: 6px; }
-.beat .say { margin-bottom: 8px; }
-.beat-code { margin-bottom: 10px; }
+/* The guided walkthrough: a sentence, then just the code it is about. Each
+   beat is its own bordered card, numbered like a step, so a long walkthrough
+   reads as a sequence and not one continuous stream of text and code. */
+.walk { display: flex; flex-direction: column; }
+.beat {
+  position: relative; background: var(--void); border: 1px solid var(--track);
+  padding: 16px 16px 16px 46px; margin-bottom: 14px;
+}
+.beat-no {
+  position: absolute; left: 15px; top: 16px;
+  width: 22px; height: 22px; border-radius: 999px; border: 1.5px solid var(--agent); color: var(--agent);
+  font-family: var(--mono); font-size: 11px; display: flex; align-items: center; justify-content: center;
+}
+.beat .say { margin-bottom: 12px; }
+.beat .say-body { border-left: none; padding-left: 0; }
+.beat-code { margin-bottom: 0; }
 .beat-file { font-family: var(--mono); font-size: 11.5px; color: var(--chalk-3); margin-bottom: 4px; }
 
 /* ---------- diff ---------- */
@@ -467,13 +508,26 @@ h1.title {
 
 /* ---------- the flow: boxes and arrows ---------- */
 
-/* A bounded box on the page, not the whole screen: the sidebar and the rest
-   of the map stay put, so opening a function never feels like a new app. */
+/* A box on the page, not a separate screen: the top bar and the sidebar stay
+   put, so opening a function never feels like a new app. But the box itself
+   is as big as the window allows, because a graph needs the room. */
+.page.flow { max-width: none; }
 .flowbox {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 38%);
-  height: min(62vh, 640px); min-height: 420px;
+  display: flex; align-items: stretch;
+  height: calc(100vh - var(--bar) - 210px); min-height: 480px;
   border: 1px solid var(--track); margin-bottom: 16px;
 }
+.flowbox-canvas { flex: 1 1 auto; min-width: 240px; }
+
+/* The drag handle between the picture and the code. Its own width is set from
+   JavaScript (map.js), remembered per browser, so it starts wide (the code is
+   the point) but stays wherever you last left it. */
+.flowbox-resizer {
+  flex: 0 0 7px; position: relative; cursor: col-resize; background: var(--track);
+}
+.flowbox-resizer::before { content: ""; position: absolute; inset: 0 -4px; }
+.flowbox-resizer:hover, .flowbox-resizer.active { background: var(--you); }
+.flowbox-resizer:focus-visible { outline: 2px solid var(--you); outline-offset: -2px; }
 
 .flow-canvas {
   position: relative; overflow: hidden; touch-action: none; cursor: grab;
@@ -516,9 +570,13 @@ h1.title {
   position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 1px;
   padding: 7px 13px; text-align: left;
   background: var(--surface); border: 1px solid var(--track); color: var(--chalk);
-  font: inherit; cursor: grab;
+  font: inherit; cursor: pointer;
 }
-.fnode:active { cursor: grabbing; }
+/* Most people click a box; only a drag past a few pixels turns this into a
+   move (see the pointer handling in flow.js). The cursor only promises
+   "grab" once that has actually started, so it does not lie the rest of the
+   time and make clicking feel broken. */
+.fnode.dragging-node { cursor: grabbing; }
 .fnode > span { min-width: 0; max-width: 100%; }
 .fnode:hover { border-color: var(--chalk-2); }
 .fnode-kind {
@@ -545,13 +603,15 @@ h1.title {
 
 /* ---------- the flow's side panel ---------- */
 
-.flowbox-panel { border-left: 1px solid var(--track); overflow-y: auto; padding: 16px 18px 40px; background: var(--surface); }
+.flowbox-panel { flex: 0 0 800px; overflow-y: auto; padding: 16px 18px 40px; background: var(--surface); }
 .fp-kind { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--chalk-3); }
 .fp-changed { color: var(--plus); margin-left: 7px; }
 .fp-name { font-family: var(--mono); font-size: 19px; font-weight: 500; margin: 5px 0 3px; word-break: break-word; }
 .fp-where { font-size: 12.5px; color: var(--chalk-3); }
 .fp-section { margin-top: 18px; }
 .fp-section > .label { margin-bottom: 8px; }
+.fp-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.fp-section-head .label { margin: 0; }
 .fp-text { margin-top: 14px; font-size: 14.5px; color: var(--chalk-2); }
 .fp-text strong { color: var(--chalk); }
 .fp-text.alert { color: var(--alert); font-weight: 600; }
@@ -581,6 +641,23 @@ h1.title {
 .cl.dim { opacity: 0.45; }
 .cl.now { background: color-mix(in srgb, var(--you) 20%, transparent); box-shadow: inset 2px 0 var(--you); }
 
+/* A function's code, big and centred, for when the side panel is too narrow
+   to read comfortably. */
+.code-modal-backdrop {
+  position: fixed; inset: 0; z-index: 70; background: rgba(2, 4, 8, 0.72);
+  display: flex; align-items: center; justify-content: center; padding: 5vh 24px;
+}
+.code-modal {
+  display: flex; flex-direction: column; width: min(1100px, 100%); max-height: 100%;
+  background: var(--void); border: 1px solid var(--track);
+}
+.code-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 18px; border-bottom: 1px solid var(--track); flex: none;
+}
+.code-modal-body { overflow: auto; padding: 4px 0; }
+.code-modal-body .code { max-height: none; border: none; padding: 10px 0; }
+
 /* ---------- motion ---------- */
 
 .in { opacity: 0; transform: translateY(8px); animation: arrive 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
@@ -595,8 +672,7 @@ h1.title {
 }
 
 @media (max-width: 1240px) {
-  .story { grid-template-columns: minmax(360px, 42%) 1fr; }
-  .flowbox { grid-template-columns: minmax(0, 1fr) minmax(260px, 42%); }
+  .story { grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr); }
 }
 
 @media (max-width: 1000px) {
@@ -605,7 +681,11 @@ h1.title {
   .story { grid-template-columns: 1fr; height: auto; }
   .story-read { border-right: none; padding: 24px 18px 40px; }
   .story-code { height: 80vh; }
-  .flowbox { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 55%) 1fr; height: min(80vh, 760px); }
-  .flowbox-panel { border-left: none; border-top: 1px solid var(--track); }
+  /* Too narrow to drag a divider sideways: stack instead, and let the canvas
+     and the panel share the height, not a width map.js would set from JS. */
+  .flowbox { flex-direction: column; height: min(80vh, 760px); }
+  .flowbox-canvas { flex: 1 1 55%; min-width: 0; min-height: 220px; }
+  .flowbox-resizer { display: none; }
+  .flowbox-panel { flex: 1 1 auto !important; border-top: 1px solid var(--track); min-height: 220px; }
   .page { padding: 22px 16px 60px; }
 }

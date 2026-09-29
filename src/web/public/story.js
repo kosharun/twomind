@@ -69,7 +69,27 @@ function say(kind, label, text, clip = false) {
   </div>`;
 }
 
-function voice(meta) {
+/**
+ * A section that starts closed, for things worth having but not worth
+ * competing with the story for your eyes: how to test it, what it decided,
+ * what it skipped.
+ */
+function collapsible(label, innerHtml) {
+  if (!innerHtml) return '';
+  return `<div class="collapse" data-box>
+    <button class="collapse-head" data-toggle aria-expanded="false">
+      <span class="caret">▶</span><span class="label">${esc(label)}</span>
+    </button>
+    <div class="collapse-body">${innerHtml}</div>
+  </div>`;
+}
+
+/**
+ * What you asked and what the AI says it did: real context, but not the main
+ * event, so this stays small and quiet on purpose. The story below it is the
+ * part meant to catch your eye.
+ */
+function context(meta) {
   const out = [say('you', 'You asked', meta.prompt, meta.prompt.length > 260)];
 
   if (meta.explainedBy === 'agent-note') {
@@ -80,14 +100,7 @@ function voice(meta) {
   } else {
     out.push(say('warn', '', 'The AI did not explain this change.'));
   }
-
-  if (meta.howToTest?.length) {
-    out.push(`<div class="say">
-      <span class="label">How to check it</span>
-      <ol class="steps">${meta.howToTest.map((step) => `<li>${esc(step)}</li>`).join('')}</ol>
-    </div>`);
-  }
-  return out.join('');
+  return `<div class="context">${out.join('')}</div>`;
 }
 
 function chapterCard(chapter, index, ctx) {
@@ -126,22 +139,15 @@ function fileGroups(ctx) {
 }
 
 function tail(meta) {
-  const out = [];
-  if (meta.decisions?.length) {
-    out.push(`<div class="block">
-      <div class="label">What it decided</div>
-      <ul class="plain-list">${meta.decisions
+  const decisions = meta.decisions?.length
+    ? `<ul class="plain-list">${meta.decisions
         .map((d) => `<li><strong>${esc(d.choice)}</strong>${d.why ? `: ${esc(d.why)}` : ''}</li>`)
-        .join('')}</ul>
-    </div>`);
-  }
-  if (meta.notTested?.length) {
-    out.push(`<div class="block">
-      <div class="label">It did not check</div>
-      <ul class="plain-list">${meta.notTested.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
-    </div>`);
-  }
-  return out.join('');
+        .join('')}</ul>`
+    : '';
+  const notTested = meta.notTested?.length
+    ? `<ul class="plain-list">${meta.notTested.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`
+    : '';
+  return collapsible('What it decided', decisions) + collapsible('It did not check', notTested);
 }
 
 function readColumn(ctx) {
@@ -152,7 +158,7 @@ function readColumn(ctx) {
 
   const parts = chapters.length
     ? `<div class="section">
-        <div class="label section-label">The story, in ${plural(chapters.length, 'part')}</div>
+        <div class="story-label">The story, in ${plural(chapters.length, 'part')}</div>
         <div class="parts">${chapters.map((c, i) => chapterCard(c, i, ctx)).join('')}</div>
       </div>
       ${
@@ -163,7 +169,7 @@ function readColumn(ctx) {
             </div>`
           : ''
       }`
-    : fileGroups(ctx);
+    : `<div class="section"><div class="story-label">The files, as the AI ranked them</div>${fileGroups(ctx)}</div>`;
 
   return `<div class="story-head">
       <div class="badge">${String(ctx.number ?? '').padStart(2, '0')}</div>
@@ -176,9 +182,9 @@ function readColumn(ctx) {
         <span class="minus">&minus;${meta.stats.deleted}</span>
       </div>
     </div>
-    ${voice(meta)}
+    ${context(meta)}
+    ${collapsible('How to check it', meta.howToTest?.length ? `<ol class="steps">${meta.howToTest.map((step) => `<li>${esc(step)}</li>`).join('')}</ol>` : '')}
     ${parts}
-    ${chapters.length ? `<div class="section">${fileGroups(ctx)}</div>` : ''}
     ${tail(meta)}`;
 }
 
@@ -205,10 +211,17 @@ function chunk(title, kind, fileDiff, open) {
 function fileCodeHtml(file, ctx) {
   const full = ctx.diffsByPath[file.path];
   if (!full) return renderDiff(full);
-  if (ctx.forceFull?.has(file.path)) return renderDiff(full);
 
   const fns = (ctx.outline?.[file.path] ?? []).slice().sort((a, b) => a.line - b.line);
-  if (fns.length < 1) return renderDiff(full);
+  const canSplit = fns.length >= 1;
+
+  if (ctx.forceFull?.has(file.path)) {
+    return (
+      renderDiff(full) +
+      (canSplit ? `<button class="chunk-all" data-show-split="${esc(file.path)}">Back to the short view</button>` : '')
+    );
+  }
+  if (!canSplit) return renderDiff(full);
 
   const spans = [];
   let cursor = 1;
@@ -259,12 +272,13 @@ function fileBlock(file, innerHtml) {
 function walkthroughHtml(chapter, ctx) {
   let shownFile = null;
   const beats = chapter.steps
-    .map((step) => {
+    .map((step, i) => {
       const fileDiff = step.file ? ctx.diffsByPath[step.file] : null;
       const hasCode = fileDiff && step.lines?.length;
       const showFileLabel = hasCode && step.file !== shownFile;
       if (hasCode) shownFile = step.file;
       return `<div class="beat">
+        <span class="beat-no">${i + 1}</span>
         <div class="say ai"><div class="say-body small">${esc(step.say)}</div></div>
         ${
           hasCode
@@ -362,10 +376,13 @@ function draw(ctx) {
     <div class="story-read">${readColumn(ctx)}</div>
     <div class="story-code">${codeColumn(ctx)}</div>
   </div>`);
+  // The read column is built once and never replaced after this, so it only
+  // needs wiring here; the code column gets rewired every time it repaints.
+  wireDisclosures(document.querySelector('.story-read'));
   wireDisclosures(document.querySelector('.story-code'));
 
   document.querySelector('.story').addEventListener('click', (event) => {
-    const target = event.target.closest('[data-part], [data-file], [data-unclip], [data-show-full]');
+    const target = event.target.closest('[data-part], [data-file], [data-unclip], [data-show-full], [data-show-split]');
     if (!target) return;
 
     if (target.dataset.part !== undefined) {
@@ -376,6 +393,9 @@ function draw(ctx) {
       paint(ctx);
     } else if (target.dataset.showFull !== undefined) {
       ctx.forceFull.add(target.dataset.showFull);
+      paint(ctx);
+    } else if (target.dataset.showSplit !== undefined) {
+      ctx.forceFull.delete(target.dataset.showSplit);
       paint(ctx);
     } else {
       target.previousElementSibling.classList.remove('clip');
