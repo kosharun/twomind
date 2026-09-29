@@ -2,182 +2,261 @@
 
 # twomind
 
-**Your AI remembers how you build. You remember what it built, and why.**
-
-Two-way memory for AI coding. Works with Claude Code and Codex. Other agents use one command.
-
-```bash
-npx twomind@latest init      # set up this project
-npx twomind@latest serve     # open the dashboard
-npx twomind@latest score     # rate any repo, nothing installed, read-only
-```
+**Your AI remembers the code. Twomind helps you remember it too.**
 
 </div>
 
----
+Have you ever been two prompts deep and already forgotten what the AI changed
+in the first one?
 
-## The problem
+The feature works. The tests pass. But a week later, you open the code and have
+no idea why it was built that way.
 
-You ask the AI for a feature. It works. A week later you cannot remember why it
-did things that way, and you find it built a second `formatCurrency` next to the
-one you already had.
+That is the problem Twomind is trying to fix.
 
-Researchers call this **comprehension debt**: the gap between how much code
-exists and how much of it a human actually understands. It is measurable:
+Twomind saves a short story after each AI task. It shows what changed, why it
+changed, and which code is worth reading. It also gives you a dashboard where
+you can catch up and follow the code without opening ten files at once.
 
-- Developers who used AI to learn a library scored **17% lower** on a comprehension
-  quiz than those who hand-coded it (50% vs 67%, Anthropic, 2026). Those who used
-  AI to *ask questions* scored 65%+. Those who only delegated scored under 40%.
-- Refactored code fell to **3.8%** of all changes while copy/paste rose to **15.7%**,
-  and calls from new code into existing functions dropped **35%** since 2023 (GitClear, 2026).
-- Most AI-authored pull requests in one study received **no human review at all** (EASE, 2026).
+It works with Claude Code and Codex. Your Twomind data stays inside your
+project.
 
-Your agent already has a memory. You do not.
+## The short version
 
-## What this does
+Twomind gives you four things:
 
-**1. The agent walks you through every change.** When your agent finishes a
-job, it writes a note: what it did, why, how to test it, and the story of the
-change in 1 to 6 chapters. Open a chapter and it plays back like someone
-sitting next to you: one short sentence, then just the few lines it is about,
-then the next sentence. Twomind checks the agent's file names and line
-numbers against the real diff; a claim that does not match the code is
-dropped, never shown as fact. If the agent explains nothing, the screen says
-so, and never makes up an explanation of its own.
+- A story for each change your AI makes
+- A short explanation of what changed and why
+- A code map that shows which functions call each other
+- One place to catch up after being away from the project
 
-A file with no walkthrough is never dumped whole. It is split at its real
-function boundaries, read with a parser, each one collapsed to its name until
-you open it, so a 100-line file reads as half a dozen short, labelled pieces.
+Twomind does not write a new explanation later and hope it is right. The agent
+that made the change writes the note while the work is still fresh. Twomind
+checks that note against the real code before showing it to you.
 
-**2. A code map you can click through.** Search any function or route and see
-it as boxes and arrows: what it calls, and the condition on each line.
+## Install Twomind from GitHub
 
-```
-PATCH /tickets/:id/status
-  changeStatus()
-    1  validateTicket()     if !ticket  ->  TicketNotFoundError
-    2  notifyAssignee()     case IN_PROGRESS
-    3  EventBus.publish()   case DONE          (outside the project)
-    4  save()  ->  Pool.query()                (outside the project)
-```
+You need [Node.js 20 or newer](https://nodejs.org/) and Git.
 
-Click a box for its code and what it calls; drag one if two arrows overlap.
-It opens on the same page, next to the rest of the map, never as a separate
-screen.
-
-Flows are read with a real parser (JavaScript and TypeScript for now). They
-follow imports, `require`, classes and typed fields like `this.repo`. Nothing is
-run, and a call that cannot be followed is left out, never guessed.
-
-**3. Catch up.** Been away three days? One page: what changed, the few things
-worth reading, and where the work was.
-
-**4. A project brain both sides read.** Setup questions with answers pre-filled
-from your code, saved as plain Markdown in your repo and pointed to from
-`AGENTS.md` and `CLAUDE.md`.
-
-## Install
-
-Install Twomind globally once to make the `twomind` command available in every
-terminal:
+First, clone Twomind and open its folder:
 
 ```bash
-npm install --global twomind
-cd your-project
+git clone https://github.com/kosharun/twomind.git
+cd twomind
+```
+
+Install what it needs and build it:
+
+```bash
+npm install
+npm run build
+```
+
+Now install the `twomind` command on your computer:
+
+```bash
+npm install --global .
+```
+
+The dot means "install the project from this folder."
+
+Check that it worked:
+
+```bash
+twomind --version
+```
+
+You only install Twomind once. After that, the `twomind` command works from any
+folder on your computer.
+
+## Add Twomind to one of your projects
+
+Open a Git project where you use Claude Code or Codex:
+
+```bash
+cd path/to/your-project
+twomind init
+```
+
+Twomind will ask a few questions about the project. It will also connect itself
+to the AI tools it finds.
+
+Now open the dashboard:
+
+```bash
+twomind serve
+```
+
+That is it. Keep working as usual. When your agent finishes a task, Twomind
+saves the story and it appears in the dashboard.
+
+For every other project, you only need:
+
+```bash
+cd path/to/another-project
 twomind init
 twomind serve
 ```
 
-If you prefer not to install it globally, run any command with
-`npx twomind@latest <command>` instead.
+You do not install Twomind again.
 
-Then work normally. Leave the dashboard open in a second window: a new story
-appears by itself when your agent finishes a job.
+### One extra step for Codex
 
-## Design choices, and why
+After `twomind init`, restart Codex so it loads the new hooks. Then run:
 
-**No API key. No model calls.** The agent you already use writes the
-explanation, in the same session that made the change, while it still knows
-why. Diffs and flows are computed from your code, for free.
+```text
+/hooks
+```
 
-**The agent ranks, not us.** Which files are the heart of a change and which
-are small follow-ups is the agent's call, and the screen says whose call it was.
-Research on AI explanations is blunt: a confident wrong explanation is *worse*
-than none, because it raises your confidence while lowering your accuracy. So
-Twomind never guesses at meaning. It only checks the agent's claims against the
-real diff.
+Trust the Twomind hooks when Codex asks.
 
-**It never touches your git state.** Snapshots go through a throwaway index file
-(`GIT_INDEX_FILE`). Your staging area, branch, HEAD and stash are never read or
-modified. This is what lets it diff one prompt exactly, even with nothing committed.
+## What you will see
 
-**Hooks fail silently, always.** The capture commands exit 0 no matter what. A
-missed story is a small loss; a broken agent session is not acceptable.
+### Stories
 
-**Your rules stay small.** An ETH Zurich study found AI-generated `AGENTS.md`
-files *lowered* task success by about 3% and raised cost by 20% or more. Models
-follow roughly 150 to 200 instructions well, then start ignoring all of them
-rather than the least important ones. So the always-loaded part is tiny.
+Each AI task becomes a small story. You can read what changed, why it changed,
+and how to test it. The story points to the real files and lines.
 
-**Local and private.** Raw prompts and snapshots live in `.twomind/.local/`, which
-is gitignored. Prompts are redacted for credentials before anything is written to a
-file that could be committed.
+If the agent did not explain something, Twomind says that. It does not make up
+an answer.
+
+### Code map
+
+Search for a route or function and see what it calls. Open a box to read the
+code. Calls that leave your project are marked. Calls that Twomind cannot
+follow are left out instead of guessed.
+
+JavaScript and TypeScript are supported for now.
+
+### Catch up
+
+Open the dashboard after a few days away and see what changed, which files
+matter, and where to start reading.
+
+### Project notes
+
+Twomind keeps the main facts about your project in plain Markdown files. Your
+agent can read them too, so you do not need to explain the same rules in every
+new chat.
+
+## A normal day with Twomind
+
+1. Open your project.
+2. Run `twomind serve` if you want the dashboard open.
+3. Work with Claude Code or Codex as usual.
+4. Finish a task.
+5. Open the new story and see what happened.
+
+The dashboard does not need to stay open for Twomind to save stories.
+
+## What Twomind changes in your project
+
+```text
+.twomind/
+  project/       what the project is and how you work
+  map/           a simple map of the code
+  stories/       one folder for each saved change
+  inbox/         notes waiting for your answer
+  .local/        prompts and snapshots that stay on your machine
+
+AGENTS.md        a small Twomind section for AI agents
+CLAUDE.md        tells Claude Code to read the same section
+```
+
+The files are plain Markdown and JSON. You can read them without Twomind.
+
+Twomind does not change your branch, commits, staging area, or stash.
+
+## Private by default
+
+Twomind does not need an API key. It does not send your project to another AI.
+It uses the agent you already work with.
+
+Raw prompts and snapshots stay in `.twomind/.local/`. That folder is ignored by
+Git. Twomind also removes common secrets before saving anything that could be
+committed.
 
 ## Commands
 
-| | |
+| Command | What it does |
 |---|---|
-| `twomind init` | Set up this project, run the interview, connect your agents. |
-| `twomind serve` | Open the dashboard (`--port`, `--no-open`). |
-| `twomind record` | Save a story by hand. For agents without hooks: the agent runs it after writing its note. |
-| `twomind refresh` | Re-install the hooks and the `AGENTS.md` block, for example after an update. |
-| `twomind doctor` | Find out why capture is not working. |
-| `twomind score` | Rate any repository. No install, read-only, works anywhere. |
-| `twomind backfill` | Build stories from recent commits. They have no agent explanation. |
-| `twomind uninstall` | Remove our hooks. Leaves your settings and `.twomind/` alone. |
+| `twomind init` | Add Twomind to the current project. |
+| `twomind serve` | Open the dashboard. |
+| `twomind record` | Save a story by hand. |
+| `twomind refresh` | Update the hooks after a Twomind update. |
+| `twomind doctor` | Check why something is not working. |
+| `twomind score` | Check a repo without changing it. |
+| `twomind backfill` | Make simple stories from older commits. |
+| `twomind uninstall` | Remove Twomind hooks from the current project. |
 
-## What ends up in your repo
+Run `twomind` with no command to see the help screen.
 
+## Update Twomind
+
+Open the folder where you cloned Twomind, then run:
+
+```bash
+git pull
+npm install
+npm run build
+npm install --global .
 ```
-.twomind/
-  project/       what this is, the rules, decisions     <- agents read this
-  map/           plain-language map of code and data
-  stories/       one folder per change, for humans      <- agents never load this
-  inbox/         things the AI wants to remember, waiting for your yes
-  .local/        raw prompts and snapshots (gitignored, stays on your machine)
-AGENTS.md        one managed block added; the rest of your file is untouched
-CLAUDE.md        one line, "@AGENTS.md", so Claude Code reads the same block
+
+Then run this inside each project where you use it:
+
+```bash
+twomind refresh
 ```
 
-Plain Markdown and JSON. Readable without this tool. Delete the folder and nothing
-else breaks.
+## Remove Twomind
+
+First, open each project where you added Twomind and remove its hooks:
+
+```bash
+twomind uninstall
+```
+
+Then remove the global command:
+
+```bash
+npm uninstall --global twomind
+```
+
+Twomind leaves the `.twomind` folder in place so your stories are not deleted.
+You can delete that folder yourself if you no longer want it.
 
 ## Requirements
 
-Node 20+ and git. Claude Code or Codex for automatic capture; any other agent can
-use `twomind record`. Windows, macOS and Linux.
+- Node.js 20 or newer
+- Git
+- Windows, macOS, or Linux
+- Claude Code or Codex for automatic stories
 
-> Codex asks you to trust project hooks before they run: open Codex and run
-> `/hooks` once after `init`.
+Other AI agents can use `twomind record` to save a story by hand.
 
 ## Contributing
 
 ```bash
 npm install
-npm test        # builds, then checks the flow reader on a sample project
+npm test
 ```
 
-- The dashboard is plain ES modules and CSS in `src/web/public/`, no framework and
-  no build step. Read [docs/DESIGN.md](docs/DESIGN.md) before changing a screen.
-- The flow reader lives in `src/core/flow/`: `parse.ts` reads one file,
-  `resolve.ts` connects the files, `graph.ts` builds what the dashboard draws.
-  A new language is a new reader that fills the same shapes (`types.ts`).
+The dashboard uses plain JavaScript and CSS in `src/web/public/`.
+
+The code map lives in `src/core/flow/`:
+
+- `parse.ts` reads a file
+- `resolve.ts` connects files
+- `graph.ts` builds the map shown in the dashboard
+
+Read [docs/DESIGN.md](docs/DESIGN.md) before changing the dashboard.
 
 ## Status
 
-Early. Capture, the guided walkthrough, flows and catch-up are built.
-See [docs/ROADMAP.md](docs/ROADMAP.md) for what is next, and
-[RESEARCH.md](RESEARCH.md) for the evidence behind it.
+Twomind is early. Stories, the dashboard, the code map, and catch-up are built.
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next. The research behind
+the project is in [RESEARCH.md](RESEARCH.md).
 
 ## License
 
