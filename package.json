@@ -1,0 +1,40 @@
+{
+  "name": "twomind",
+  "version": "0.1.0",
+  "description": "Two-way memory for AI coding. Your AI remembers how you build. You remember what it built, and why.",
+  "type": "module",
+  "bin": {
+    "twomind": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "dev": "tsx src/cli.ts",
+    "watch": "tsc -p tsconfig.json --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "claude-code",
+    "codex",
+    "agent",
+    "memory",
+    "code-comprehension",
+    "diff",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
