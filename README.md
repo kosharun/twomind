@@ -7,9 +7,9 @@
 Two-way memory for AI coding. Works with Claude Code and Codex. Other agents use one command.
 
 ```bash
-npx twomind init      # set up this project
-npx twomind serve     # open the dashboard
-npx twomind score     # rate any repo, nothing installed, read-only
+npx twomind@latest init      # set up this project
+npx twomind@latest serve     # open the dashboard
+npx twomind@latest score     # rate any repo, nothing installed, read-only
 ```
 
 </div>
@@ -78,11 +78,18 @@ from your code, saved as plain Markdown in your repo and pointed to from
 
 ## Install
 
+Install Twomind globally once to make the `twomind` command available in every
+terminal:
+
 ```bash
+npm install --global twomind
 cd your-project
-npx twomind init
-npx twomind serve
+twomind init
+twomind serve
 ```
+
+If you prefer not to install it globally, run any command with
+`npx twomind@latest <command>` instead.
 
 Then work normally. Leave the dashboard open in a second window: a new story
 appears by itself when your agent finishes a job.

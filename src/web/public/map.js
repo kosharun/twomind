@@ -206,7 +206,9 @@ export async function showFunction(id, onOpenStory) {
   }
 
   const entry = graph.nodes.find((n) => n.id === graph.entry);
-  setScreen(`<div class="page wide">
+  // This screen gets the full window width, not the usual reading width: a
+  // graph needs the room a column of text does not.
+  setScreen(`<div class="page flow">
     <div class="head">
       <button class="btn" id="map-back">Back to the map</button>
       <div class="sym-name">${esc(entry.name)}</div>
@@ -215,20 +217,107 @@ export async function showFunction(id, onOpenStory) {
 
     <div class="flowbox">
       <div class="flowbox-canvas"></div>
+      <div class="flowbox-resizer" role="separator" aria-orientation="vertical" aria-label="Resize the code panel" tabindex="0"></div>
       <aside class="flowbox-panel"></aside>
     </div>
 
     <div class="footnote">
-      Boxes are what this calls, read with a parser. A dashed box leaves your project. Click a box for
-      its code; drag one if two arrows overlap.
+      Boxes are what this calls, read with a parser. A dashed box leaves your project. Click a box to
+      open its code here, on the right; drag a box if two arrows overlap.
     </div>
   </div>`);
 
   document.querySelector('#map-back').addEventListener('click', () => showMap(onOpenStory));
+  const stopResize = setupPanelResize(document.querySelector('.flowbox'));
   const flow = mountFlow(document.querySelector('.flowbox-canvas'), document.querySelector('.flowbox-panel'), graph, {
     onOpen: (nextId) => showFunction(nextId, onOpenStory),
   });
-  onLeave(() => flow.destroy());
+  onLeave(() => {
+    flow.destroy();
+    stopResize();
+  });
+}
+
+const PANEL_WIDTH_KEY = 'twomind-flow-panel-width';
+const PANEL_MIN = 320;
+const PANEL_DEFAULT = 800; // double the old fixed 400px, at the owner's request
+
+/**
+ * The drag handle between the flow's picture and its code. The width is
+ * remembered per browser (not per function), so it starts at double the old
+ * default and then stays wherever you last left it.
+ */
+function setupPanelResize(box) {
+  const canvas = box.querySelector('.flowbox-canvas');
+  const resizer = box.querySelector('.flowbox-resizer');
+  const panel = box.querySelector('.flowbox-panel');
+  let width = Number(localStorage.getItem(PANEL_WIDTH_KEY)) || PANEL_DEFAULT;
+
+  const apply = () => {
+    // Below the mobile breakpoint the panel stacks under the canvas, full width;
+    // a leftover inline width would fight that layout, so this leaves it alone.
+    if (window.innerWidth <= 1000) {
+      panel.style.flexBasis = '';
+      return;
+    }
+    // The canvas keeps at least this much room: at 360px, most of the picture
+    // was falling off the edge, which is a second, quieter way for a box to
+    // become "unclickable" (you are really clicking empty page next to it).
+    const max = Math.max(PANEL_MIN, box.getBoundingClientRect().width - 480);
+    width = Math.min(Math.max(width, PANEL_MIN), max);
+    panel.style.flexBasis = `${width}px`;
+  };
+  apply();
+
+  const nudge = (delta) => {
+    width += delta;
+    apply();
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(width));
+    } catch {
+      /* private mode: the width still works for this session */
+    }
+  };
+
+  let dragging = false;
+  const onMove = (event) => {
+    if (!dragging) return;
+    width = box.getBoundingClientRect().right - event.clientX;
+    apply();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('active');
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(width));
+    } catch {
+      /* private mode: the width still works for this session */
+    }
+  };
+
+  resizer.addEventListener('pointerdown', (event) => {
+    dragging = true;
+    resizer.classList.add('active');
+    try {
+      resizer.setPointerCapture(event.pointerId);
+    } catch {
+      /* the drag still works without capturing the pointer */
+    }
+    event.preventDefault();
+  });
+  resizer.addEventListener('pointermove', onMove);
+  resizer.addEventListener('pointerup', onUp);
+  resizer.addEventListener('pointercancel', onUp);
+  resizer.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') nudge(24);
+    else if (event.key === 'ArrowRight') nudge(-24);
+    else return;
+    event.preventDefault();
+  });
+  window.addEventListener('resize', apply);
+
+  return () => window.removeEventListener('resize', apply);
 }
 
 /** A name with no flow of its own (a class, a type, or code in another language). */

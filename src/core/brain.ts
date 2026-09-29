@@ -209,13 +209,16 @@ Before creating a new function, component or helper, search for an existing one 
 
 List every file you changed. You decide the level: "start" = the heart of the change
 (1-3 files), "important" = worth reading, "small" = a minor follow-up. Use simple words.
-"chapters" tell the change as a story, in reading order: 1 for a small change, up to 6 for a
-big one. One chapter can cover many files.
+"chapters" tell the change as a story, in reading order: 1 for a small change, around 6 for a
+big one. A huge change (many files) can use more, but each chapter is still one idea, not one
+file. One chapter can cover many files.
 
 Give each chapter "steps": walk the owner through its code slowly, one plain sentence at a
 time, each one pointing at just the few lines it is talking about. This is the part that
 matters most: do not only name a file, guide the owner through it like you are sitting next
 to them. The first step needs "file"; later steps can leave it out to stay on the same file.
+Keep a chapter to around 8 steps or fewer; if one idea needs more, it is really two ideas, so
+split it into two chapters.
 
 Claude Code and Codex save the note by themselves. In any other tool, run this after
 writing the note: \`${recordCommand}\`
