@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './core/config.js';
 import { findProjectRoot, isInitialised } from './core/paths.js';
@@ -18,7 +19,10 @@ import {
   uninstallHooks,
 } from './adapters/install.js';
 
-const VERSION = '0.1.0';
+const packageInfo = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+) as { version?: string };
+const VERSION = packageInfo.version ?? 'unknown';
 
 function flag(args: string[], name: string): boolean {
   return args.includes(`--${name}`);

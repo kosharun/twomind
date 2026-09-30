@@ -1,6 +1,6 @@
 {
   "name": "twomind",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Two-way memory for AI coding. Your AI remembers how you build. You remember what it built, and why.",
   "type": "module",
   "repository": {
