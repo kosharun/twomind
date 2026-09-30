@@ -196,8 +196,11 @@ export function managedBlock(): string {
 ## Twomind
 
 The project owner's instructions outside this block always win.
-Before substantial work, read \`.twomind/project/overview.md\` and \`.twomind/project/rules.md\`.
-After changing files, follow \`.twomind/project/recording.md\` before your final reply.
+Before editing files, read \`.twomind/project/overview.md\` and \`.twomind/project/rules.md\`.
+If you changed any file, before your final reply:
+1. Read \`.twomind/project/recording.md\`.
+2. Write \`.twomind/.local/note.json\` exactly as that file explains.
+Twomind saves the note automatically.
 ${BLOCK_END}`;
 }
 

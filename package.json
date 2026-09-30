@@ -1,6 +1,6 @@
 {
   "name": "twomind",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Two-way memory for AI coding. Your AI remembers how you build. You remember what it built, and why.",
   "type": "module",
   "repository": {
@@ -12,7 +12,7 @@
     "url": "https://github.com/kosharun/twomind/issues"
   },
   "bin": {
-    "twomind": "./dist/cli.js"
+    "twomind": "dist/cli.js"
   },
   "main": "./dist/cli.js",
   "files": [
@@ -29,6 +29,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "dev": "tsx src/cli.ts",
+    "install-global": "node scripts/install-global.mjs",
     "watch": "tsc -p tsconfig.json --watch",
     "prepack": "npm run build",
     "test": "npm run build && node --test \"test/*.test.mjs\""

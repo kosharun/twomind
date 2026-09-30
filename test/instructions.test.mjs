@@ -32,6 +32,8 @@ test('adding the Twomind block preserves every existing AGENTS.md byte', (t) => 
   assert.ok(result.startsWith(ownerRules));
   assert.match(result, /project owner's instructions outside this block always win/);
   assert.match(result, /\.twomind\/project\/recording\.md/);
+  assert.match(result, /\.twomind\/\.local\/note\.json/);
+  assert.match(result, /Twomind saves the note automatically/);
   assert.doesNotMatch(result, /twomind record|node\.exe|dist\/cli\.js/);
   assert.equal(result.match(/<!-- twomind:start -->/g)?.length, 1);
   assert.equal(result.match(/<!-- twomind:end -->/g)?.length, 1);
@@ -67,7 +69,7 @@ test('broken Twomind markers stop safely without changing AGENTS.md', (t) => {
 test('the managed block stays short and the full note guide is kept in Twomind', (t) => {
   const root = temporaryProject(t);
   const block = managedBlock();
-  assert.ok(block.split('\n').length <= 9);
+  assert.ok(block.split('\n').length <= 10);
 
   const first = writeRecordingGuide(root);
   assert.equal(first.action, 'created');
