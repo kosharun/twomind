@@ -175,7 +175,7 @@ export function explanationStyle(): string {
   const fallback = 'Plain, simple English. Short sentences. Say what changed and how to test it.';
   try {
     const text = readFileSync(path.join(userHome(), 'me.md'), 'utf8');
-    const match = text.match(/\*\*Explanations:\*\*\s*(.+)/);
+    const match = text.match(/\*\*(?:Show me this first|Explanations):\*\*\s*(.+)/i);
     const style = match?.[1]?.trim() ?? '';
     return style && !style.includes('not answered') ? style : fallback;
   } catch {

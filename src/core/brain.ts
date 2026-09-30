@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { resolveProjectPaths, userHome } from './paths.js';
+import { NOTE_TEMPLATE } from './note.js';
 import type { ScanResult } from './scan.js';
 
 /**
@@ -17,34 +18,34 @@ import type { ScanResult } from './scan.js';
 export const ALWAYS_LOADED_LINE_BUDGET = 150;
 
 export interface InterviewAnswers {
-  summary: string;
-  stage: string;
-  importantAreas: string;
-  neverWithoutAsking: string;
-  autonomy: string;
-  conventions: string;
-  sharedCodeLocation: string;
-  testingRules: string;
-  petPeeves: string;
-  deepAreas: string;
-  explanationStyle: string;
-  closeness: string;
+  audienceAndPurpose: string;
+  currentAndNext: string;
+  riskyAreas: string;
+  alwaysAsk: string;
+  safeWithoutAsking: string;
+  protectedAreas: string;
+  sourceOfTruth: string;
+  patternToFollow: string;
+  doneChecks: string;
+  whenUnclearOrFailing: string;
+  storyPreference: string;
+  pastMistake: string;
 }
 
 export function emptyAnswers(): InterviewAnswers {
   return {
-    summary: '',
-    stage: '',
-    importantAreas: '',
-    neverWithoutAsking: '',
-    autonomy: '',
-    conventions: '',
-    sharedCodeLocation: '',
-    testingRules: '',
-    petPeeves: '',
-    deepAreas: '',
-    explanationStyle: '',
-    closeness: '',
+    audienceAndPurpose: '',
+    currentAndNext: '',
+    riskyAreas: '',
+    alwaysAsk: '',
+    safeWithoutAsking: '',
+    protectedAreas: '',
+    sourceOfTruth: '',
+    patternToFollow: '',
+    doneChecks: '',
+    whenUnclearOrFailing: '',
+    storyPreference: '',
+    pastMistake: '',
   };
 }
 
@@ -57,13 +58,11 @@ export function renderOverview(scan: ScanResult, answers: InterviewAnswers): str
 
 > Read this first. Keep it short: this file is loaded into every agent session.
 
-**In one sentence:** ${bullet(answers.summary || scan.description)}
+**Who uses it and what they use it to do:** ${bullet(answers.audienceAndPurpose || scan.description)}
 
-**Stage:** ${bullet(answers.stage)}
+**What works today and what is next:** ${bullet(answers.currentAndNext)}
 
-**Most important or riskiest areas:** ${bullet(answers.importantAreas)}
-
-**Areas the owner wants to understand deeply:** ${bullet(answers.deepAreas)}
+**Parts that need extra care:** ${bullet(answers.riskyAreas)}
 
 ## Stack (detected, correct anything wrong)
 
@@ -73,9 +72,9 @@ export function renderOverview(scan: ScanResult, answers: InterviewAnswers): str
 - Package manager: ${scan.packageManager ?? 'unknown'}
 - Top-level folders: ${scan.topFolders.join(', ') || 'unknown'}
 
-## Where things live
+## Example to follow
 
-- Shared helpers and components: ${bullet(answers.sharedCodeLocation)}
+${bullet(answers.patternToFollow)}
 `;
 }
 
@@ -89,11 +88,23 @@ export function renderRules(answers: InterviewAnswers): string {
 
 Do not do any of these without asking first:
 
-${bullet(answers.neverWithoutAsking)}
+${bullet(answers.alwaysAsk)}
 
-## How much to decide alone
+## Safe without asking
 
-${bullet(answers.autonomy)}
+${bullet(answers.safeWithoutAsking)}
+
+## Protected parts
+
+${bullet(answers.protectedAreas)}
+
+## What to trust
+
+${bullet(answers.sourceOfTruth)}
+
+## Pattern to follow
+
+${bullet(answers.patternToFollow)}
 
 ## Reuse before you create
 
@@ -101,19 +112,21 @@ Before writing a new function, component or helper, search for an existing one
 that already does the job. If you create something new that looks similar to
 something that exists, say so and say why.
 
-${answers.sharedCodeLocation.trim() ? `Shared code lives in: ${answers.sharedCodeLocation.trim()}` : ''}
+## Before calling a task finished
 
-## Style
+${bullet(answers.doneChecks)}
 
-${bullet(answers.conventions)}
+## When something is unclear or a check fails
 
-## Testing
+${bullet(answers.whenUnclearOrFailing)}
 
-${bullet(answers.testingRules)}
+## How to explain completed work
 
-## Things that have annoyed the owner before
+${bullet(answers.storyPreference)}
 
-${bullet(answers.petPeeves)}
+## A mistake that must not happen again
+
+${bullet(answers.pastMistake)}
 `;
 }
 
@@ -125,9 +138,13 @@ export function renderWorkflow(scan: ScanResult, answers: InterviewAnswers): str
 - Install: ${scan.packageManager ? `\`${scan.packageManager} install\`` : '_unknown_'}
 - Test: ${scan.testCommand ? `\`${scan.testCommand}\`` : '_unknown_'}
 
-## Testing rules
+## Before calling a task finished
 
-${bullet(answers.testingRules)}
+${bullet(answers.doneChecks)}
+
+## If something is unclear or a check fails
+
+${bullet(answers.whenUnclearOrFailing)}
 
 ## Unknown / to be filled in
 
@@ -145,7 +162,7 @@ working here. It is plain Markdown and JSON, readable without any tool.
 
 | Folder | What is in it | Loaded by agents |
 |---|---|---|
-| \`project/\` | What this project is, the rules, decisions | Always (kept small on purpose) |
+| \`project/\` | What this project is, the rules, decisions, and recording guide | Read when needed |
 | \`project/rules/\` | Rules for one area only | Only when those files are touched |
 | \`map/\` | Plain-language map of the code and the data | On demand |
 | \`stories/\` | One entry per prompt: what changed and why | Never, these are for humans |
@@ -161,9 +178,7 @@ export function renderUserProfile(answers: InterviewAnswers): string {
 
 > This file follows you across projects. It stays on your machine and is never committed.
 
-**Explanations:** ${bullet(answers.explanationStyle)}
-
-**How close I want to stay to the code:** ${bullet(answers.closeness)}
+**Show me this first:** ${bullet(answers.storyPreference)}
 `;
 }
 
@@ -173,56 +188,77 @@ const BLOCK_END = '<!-- twomind:end -->';
 /**
  * The block every agent reads (via AGENTS.md, and via CLAUDE.md's import).
  *
- * Its main job: make the agent explain its own changes. Claude Code and Codex
- * also have a Stop hook that asks for the note if the agent forgets; every
- * other agent relies on this text alone, so it also says how to save the note.
+ * Its main job is to point the agent at Twomind's small project files without
+ * crowding out rules the project owner already wrote.
  */
-export function managedBlock(recordCommand: string): string {
+export function managedBlock(): string {
   return `${BLOCK_START}
-## Twomind (managed block: edit the files in \`.twomind/project/\`, not this block)
+## Twomind
 
+The project owner's instructions outside this block always win.
 Before substantial work, read \`.twomind/project/overview.md\` and \`.twomind/project/rules.md\`.
-Before creating a new function, component or helper, search for an existing one first.
+After changing files, follow \`.twomind/project/recording.md\` before your final reply.
+${BLOCK_END}`;
+}
 
-**When you finish a task that changed files, explain it for the owner.** Write this file:
-\`.twomind/.local/note.json\`
+/** Detailed note instructions, loaded only after files change. */
+export function renderRecordingGuide(): string {
+  return `# Recording a change
+
+> Twomind manages this file. Run \`twomind refresh\` to update it.
+
+When a task changes files, explain the change for the project owner before your final reply.
+Write the explanation to \`.twomind/.local/note.json\` using this shape:
 
 \`\`\`json
-{
-  "title": "short title",
-  "request": "what the owner asked, in one line",
-  "summary": "2-4 short, plain sentences: what changed and why",
-  "chapters": [
-    { "title": "short name for one part", "what": "1-3 plain sentences about this part",
-      "files": ["exact/path"],
-      "steps": [
-        { "say": "one short, plain sentence: what happens first", "file": "exact/path", "lines": "12-18" },
-        { "say": "the next sentence, once the reader has seen that", "lines": "20-24" }
-      ] }
-  ],
-  "howToTest": ["step 1", "step 2"],
-  "files": [{ "path": "exact/path", "level": "start | important | small", "why": "one sentence" }],
-  "decisions": [{ "choice": "what you chose", "why": "why" }],
-  "notTested": ["anything you did not check"]
-}
+${NOTE_TEMPLATE}
 \`\`\`
 
-List every file you changed. You decide the level: "start" = the heart of the change
-(1-3 files), "important" = worth reading, "small" = a minor follow-up. Use simple words.
-"chapters" tell the change as a story, in reading order: 1 for a small change, around 6 for a
-big one. A huge change (many files) can use more, but each chapter is still one idea, not one
-file. One chapter can cover many files.
+List every file you changed. Use these levels:
 
-Give each chapter "steps": walk the owner through its code slowly, one plain sentence at a
-time, each one pointing at just the few lines it is talking about. This is the part that
-matters most: do not only name a file, guide the owner through it like you are sitting next
-to them. The first step needs "file"; later steps can leave it out to stay on the same file.
-Keep a chapter to around 8 steps or fewer; if one idea needs more, it is really two ideas, so
-split it into two chapters.
+- \`start\`: the heart of the change, usually one to three files
+- \`important\`: worth reading
+- \`small\`: a minor follow-up
 
-Claude Code and Codex save the note by themselves. In any other tool, run this after
-writing the note: \`${recordCommand}\`
-${BLOCK_END}`;
+Use simple words. Tell the story in reading order. One chapter is enough for a small change.
+A bigger change can use more chapters, but each chapter should explain one idea, not one file.
+One chapter can cover several files.
+
+Use \`steps\` to walk through the code slowly. Each step should be one plain sentence that
+points to only the lines it explains. The first step needs a \`file\`. Later steps can stay on
+that file. Keep a chapter to about eight steps or fewer. Split a chapter when it holds two ideas.
+
+Your job ends after writing the note. Do not run \`twomind record\` yourself. Claude's hook or
+Codex's end-of-turn notification saves it automatically. The project owner can run
+\`twomind record\` by hand only when automatic recording needs a backup.
+`;
+}
+
+function lineEndingOf(text: string): '\r\n' | '\n' {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function withLineEnding(text: string, lineEnding: '\r\n' | '\n'): string {
+  return text.replace(/\r\n|\r|\n/g, lineEnding);
+}
+
+function separatorBeforeAppend(text: string, lineEnding: '\r\n' | '\n'): string {
+  if (!text) return '';
+  if (text.endsWith(`${lineEnding}${lineEnding}`)) return '';
+  if (text.endsWith(lineEnding)) return lineEnding;
+  return `${lineEnding}${lineEnding}`;
+}
+
+function markerPositions(text: string, marker: string): number[] {
+  const positions: number[] = [];
+  let from = 0;
+  while (from < text.length) {
+    const at = text.indexOf(marker, from);
+    if (at === -1) break;
+    positions.push(at);
+    from = at + marker.length;
+  }
+  return positions;
 }
 
 /**
@@ -241,7 +277,8 @@ export function ensureClaudeImport(root: string): 'created' | 'added' | 'present
   }
   const text = readFileSync(file, 'utf8');
   if (/^\s*@\.?\/?AGENTS\.md\s*$/im.test(text)) return 'present';
-  writeFileSync(file, `${text.trimEnd()}\n\n@AGENTS.md\n`, 'utf8');
+  const lineEnding = lineEndingOf(text);
+  appendFileSync(file, `${separatorBeforeAppend(text, lineEnding)}@AGENTS.md${lineEnding}`, 'utf8');
   return 'added';
 }
 
@@ -249,20 +286,45 @@ export function ensureClaudeImport(root: string): 'created' | 'added' | 'present
 export function upsertManagedBlock(filePath: string, block: string): 'created' | 'updated' | 'unchanged' {
   const exists = existsSync(filePath);
   const existing = exists ? readFileSync(filePath, 'utf8') : '';
+  const starts = markerPositions(existing, BLOCK_START);
+  const ends = markerPositions(existing, BLOCK_END);
 
-  if (existing.includes(BLOCK_START) && existing.includes(BLOCK_END)) {
-    const before = existing.slice(0, existing.indexOf(BLOCK_START));
-    const after = existing.slice(existing.indexOf(BLOCK_END) + BLOCK_END.length);
-    const next = `${before}${block}${after}`;
+  const badMarkers =
+    starts.length !== ends.length ||
+    starts.length > 1 ||
+    (starts.length === 1 && ends[0] < starts[0]);
+
+  if (badMarkers) {
+    throw new Error(
+      `${path.basename(filePath)} has broken or repeated Twomind markers. ` +
+      'Twomind left the file unchanged. Fix the marker lines, then run the command again.'
+    );
+  }
+
+  const lineEnding = lineEndingOf(existing);
+  const safeBlock = withLineEnding(block, lineEnding);
+
+  if (starts.length === 1) {
+    const before = existing.slice(0, starts[0]);
+    const after = existing.slice(ends[0] + BLOCK_END.length);
+    const next = `${before}${safeBlock}${after}`;
     if (next === existing) return 'unchanged';
     writeFileSync(filePath, next, 'utf8');
     return 'updated';
   }
 
-  const next = exists ? `${existing.trimEnd()}\n\n${block}\n` : `# AGENTS.md\n\n${block}\n`;
   mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, next, 'utf8');
-  return exists ? 'updated' : 'created';
+  if (exists) {
+    appendFileSync(
+      filePath,
+      `${separatorBeforeAppend(existing, lineEnding)}${safeBlock}${lineEnding}`,
+      'utf8'
+    );
+    return 'updated';
+  }
+
+  writeFileSync(filePath, `# AGENTS.md${lineEnding}${lineEnding}${safeBlock}${lineEnding}`, 'utf8');
+  return 'created';
 }
 
 export interface WrittenFile {
@@ -277,6 +339,23 @@ function writeIfAbsent(file: string, contents: string): WrittenFile {
   return { file, action: 'created' };
 }
 
+function writeManagedFile(file: string, contents: string): WrittenFile {
+  mkdirSync(path.dirname(file), { recursive: true });
+  if (!existsSync(file)) {
+    writeFileSync(file, contents, 'utf8');
+    return { file, action: 'created' };
+  }
+  if (readFileSync(file, 'utf8') === contents) return { file, action: 'unchanged' };
+  writeFileSync(file, contents, 'utf8');
+  return { file, action: 'updated' };
+}
+
+/** This file belongs to Twomind, so refresh may safely replace it. */
+export function writeRecordingGuide(root: string): WrittenFile {
+  const file = path.join(resolveProjectPaths(root).project, 'recording.md');
+  return writeManagedFile(file, renderRecordingGuide());
+}
+
 export function writeBrain(root: string, scan: ScanResult, answers: InterviewAnswers): WrittenFile[] {
   const paths = resolveProjectPaths(root);
   const written: WrittenFile[] = [];
@@ -285,6 +364,7 @@ export function writeBrain(root: string, scan: ScanResult, answers: InterviewAns
   written.push(writeIfAbsent(path.join(paths.project, 'overview.md'), renderOverview(scan, answers)));
   written.push(writeIfAbsent(path.join(paths.project, 'rules.md'), renderRules(answers)));
   written.push(writeIfAbsent(path.join(paths.project, 'workflow.md'), renderWorkflow(scan, answers)));
+  written.push(writeRecordingGuide(root));
   written.push(
     writeIfAbsent(
       path.join(paths.project, 'decisions', 'README.md'),

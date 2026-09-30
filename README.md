@@ -78,8 +78,10 @@ cd path/to/your-project
 twomind init
 ```
 
-Twomind will ask a few questions about the project. It will also connect itself
-to the AI tools it finds.
+Twomind scans the technical parts itself. Then it asks 12 short questions that
+only you can answer, such as what is risky, what needs your approval, what a
+finished task means, and which old AI mistake must not happen again. It also
+connects itself to the AI tools it finds.
 
 Now open the dashboard:
 
@@ -100,15 +102,18 @@ twomind serve
 
 You do not install Twomind again.
 
-### One extra step for Codex
+### Codex in VS Code
 
-After `twomind init`, restart Codex so it loads the new hooks. Then run:
+`twomind init` connects to the Codex extension for you. You do not need the
+separate `codex` terminal command. You do not need to type `/hooks`.
 
-```text
-/hooks
-```
+Twomind adds an end-of-turn command to your Codex user settings. When Codex
+finishes a task, Codex calls that command and Twomind saves the story. The AI
+only writes the note. It does not need to run `twomind record`. If Codex was
+already open while you ran `twomind init`, reload the VS Code window once.
 
-Trust the Twomind hooks when Codex asks.
+If you already use your own Codex end-of-turn command, Twomind keeps it and
+runs it after the story is saved. It does not take that command away.
 
 ## What you will see
 
@@ -153,7 +158,7 @@ The dashboard does not need to stay open for Twomind to save stories.
 
 ```text
 .twomind/
-  project/       what the project is and how you work
+  project/       what the project is, how you work, and how the AI writes a note
   map/           a simple map of the code
   stories/       one folder for each saved change
   inbox/         notes waiting for your answer
@@ -162,6 +167,14 @@ The dashboard does not need to stay open for Twomind to save stories.
 AGENTS.md        a small Twomind section for AI agents
 CLAUDE.md        tells Claude Code to read the same section
 ```
+
+If `AGENTS.md` or `CLAUDE.md` already exists, Twomind keeps every rule you
+wrote. It adds only its own marked block or import line. Your project rules
+always come first.
+
+The Twomind block in `AGENTS.md` is only a few lines. The longer note guide
+lives in `.twomind/project/recording.md`, so it is read only after files change.
+You will not see a path from somebody else's computer in your `AGENTS.md`.
 
 The files are plain Markdown and JSON. You can read them without Twomind.
 
@@ -182,12 +195,13 @@ committed.
 |---|---|
 | `twomind init` | Add Twomind to the current project. |
 | `twomind serve` | Open the dashboard. |
-| `twomind record` | Save a story by hand. |
-| `twomind refresh` | Update the hooks after a Twomind update. |
+| `twomind record` | Save a story by hand if automatic recording is not working. |
+| `twomind refresh` | Update the connection and Twomind's small instruction files. |
 | `twomind doctor` | Check why something is not working. |
 | `twomind score` | Check a repo without changing it. |
 | `twomind backfill` | Make simple stories from older commits. |
 | `twomind uninstall` | Remove Twomind hooks from the current project. |
+| `twomind disconnect-codex` | Remove Twomind from your Codex user settings. |
 
 Run `twomind` with no command to see the help screen.
 
@@ -214,6 +228,12 @@ First, open each project where you added Twomind and remove its hooks:
 
 ```bash
 twomind uninstall
+```
+
+Then remove Twomind from your Codex user settings:
+
+```bash
+twomind disconnect-codex
 ```
 
 Then remove the global command:

@@ -4,14 +4,21 @@ import { resolveProjectPaths } from '../core/paths.js';
 import { currentBranch, diffTrees, takeSnapshot } from '../core/snapshot.js';
 import { buildStory, readLastRecorded, writeLastRecorded, writeStory } from '../core/story.js';
 
+export interface RecordOptions {
+  agent?: string;
+  prompt?: string;
+  fallbackSummary?: string;
+  sessionId?: string;
+  source?: 'agent' | 'record';
+}
+
 /**
- * `twomind record`: for agents that have no Twomind hook.
+ * `twomind record`: save the prepared agent note now.
  *
- * AGENTS.md tells every agent to write its note after a change. Claude Code
- * and Codex have hooks that pick the note up by themselves. Any other agent is
- * told to run this command afterwards: it diffs the working tree against the
- * point where the last story was saved, attaches the agent's note, and saves
- * the story.
+ * Claude's hook and Codex's end-of-turn notification normally call recordNow
+ * automatically. This public command is the manual backup. It diffs the
+ * working tree against the point where the last story was saved, attaches the
+ * agent's note, and saves the story.
  */
 
 /** Make sure there is a saved starting point, so the first `record` has something to compare with. */
@@ -23,7 +30,7 @@ export async function ensureStartingPoint(root: string): Promise<boolean> {
   return true;
 }
 
-export async function recordNow(root: string): Promise<string> {
+export async function recordNow(root: string, options: RecordOptions = {}): Promise<string> {
   const config = loadConfig(root);
   if (!config) return 'This project is not set up yet. Run "twomind init" first.';
 
@@ -47,14 +54,14 @@ export async function recordNow(root: string): Promise<string> {
   const story = buildStory({
     root,
     diff,
-    prompt: '',
+    prompt: options.prompt ?? '',
     note,
-    fallbackSummary: '',
-    agent: 'agent (record)',
-    sessionId: `record-${after.slice(0, 12)}`,
+    fallbackSummary: options.fallbackSummary ?? '',
+    agent: options.agent ?? 'agent (record)',
+    sessionId: options.sessionId ?? `record-${after.slice(0, 12)}`,
     branch: await currentBranch(root),
     includePrompt: config.capture.includePrompt,
-    source: 'record',
+    source: options.source ?? 'record',
   });
 
   writeStory(root, story);

@@ -2,15 +2,21 @@
 import path from 'node:path';
 import { loadConfig } from './core/config.js';
 import { findProjectRoot, isInitialised } from './core/paths.js';
-import { ensureClaudeImport, managedBlock, upsertManagedBlock } from './core/brain.js';
+import { ensureClaudeImport, managedBlock, upsertManagedBlock, writeRecordingGuide } from './core/brain.js';
 import { hookPrompt, hookStop } from './commands/hook.js';
 import { init } from './commands/init.js';
 import { score } from './commands/score.js';
 import { doctor } from './commands/doctor.js';
 import { backfillFromGit } from './commands/backfill.js';
 import { ensureStartingPoint, recordNow } from './commands/record.js';
+import { handleCodexNotification } from './commands/notify.js';
 import { serve } from './web/server.js';
-import { installHooks, selfCommand, uninstallHooks } from './adapters/install.js';
+import {
+  installCodexNotify,
+  installHooks,
+  uninstallCodexNotify,
+  uninstallHooks,
+} from './adapters/install.js';
 
 const VERSION = '0.1.0';
 
@@ -44,7 +50,7 @@ function help(): void {
       ${c.dim('--no-open')}         do not launch a browser
 
     ${c.cyan('record')}            save a story now, using the agent's note
-                      ${c.dim('(for agents without a Twomind hook)')}
+                      ${c.dim('(also used as the automatic safety step)')}
     ${c.cyan('refresh')}           update hooks and agent instructions after upgrading
     ${c.cyan('doctor')}            check why capture is not working
     ${c.cyan('score')}             rate any repository, nothing installed needed
@@ -52,6 +58,7 @@ function help(): void {
       ${c.dim('--limit <n>')}       how many commits to read (default 25)
 
     ${c.cyan('uninstall')}         remove our hooks, leave everything else alone
+    ${c.cyan('disconnect-codex')}  remove Twomind from Codex's user settings
 
   ${c.bold('Try it')}
     ${c.dim('$')} twomind init
@@ -71,6 +78,17 @@ async function main(): Promise<void> {
   const [, , command, ...args] = process.argv;
 
   switch (command) {
+    case 'notify':
+      // Codex appends one JSON argument after the configured argv.
+      // This runs behind the IDE, so it must stay quiet and never block a turn.
+      if (args[0] === 'codex') {
+        const then = args.indexOf('--then');
+        const raw = then === -1 ? args[1] ?? '' : args.at(-1) ?? '';
+        const thenCommand = then === -1 ? [] : args.slice(then + 1, -1);
+        await handleCodexNotification(raw, thenCommand);
+      }
+      return;
+
     case 'hook': {
       // Runs inside the agent. Must never exit non-zero or print anything
       // except the JSON a Stop hook deliberately returns.
@@ -114,15 +132,31 @@ async function main(): Promise<void> {
       // block. No interview, and nothing of the user's own is touched.
       const root = await requireProject();
       if (!root) return;
-      for (const agent of ['claude', 'codex'] as const) {
-        const result = installHooks(root, agent);
-        console.log(`  hooks      ${agent.padEnd(7)} ${path.relative(root, result.file)}`);
-      }
-      const block = upsertManagedBlock(path.join(root, 'AGENTS.md'), managedBlock(selfCommand('record')));
+      const claude = installHooks(root, 'claude');
+      console.log(`  hooks      ${'claude'.padEnd(7)} ${path.relative(root, claude.file)}`);
+      // Older Twomind versions installed Codex project hooks. Remove only ours
+      // because the IDE cannot trust them without the separate terminal app.
+      uninstallHooks(root, 'codex');
+      const notify = installCodexNotify(root);
+      console.log(`  Codex IDE  ${notify.action.padEnd(17)} ${notify.file}`);
+      if (notify.note) console.log(`             ${notify.note}`);
+      const guide = writeRecordingGuide(root);
+      console.log(`  note guide ${guide.action}`);
+      const block = upsertManagedBlock(path.join(root, 'AGENTS.md'), managedBlock());
       console.log(`  AGENTS.md  ${block}`);
       console.log(`  CLAUDE.md  ${ensureClaudeImport(root)}`);
       await ensureStartingPoint(root);
-      console.log('\n  Now restart the agent (Ctrl+Shift+P → "Reload Window" in VS Code) so it loads the new hooks.\n');
+      console.log('\n  If Codex is already open, reload the VS Code window once.\n');
+      return;
+    }
+
+    case 'disconnect-codex': {
+      const result = uninstallCodexNotify();
+      console.log(
+        result
+          ? `\n  Removed Twomind's end-of-turn command from ${result.file}.\n`
+          : '\n  Twomind does not own the Codex end-of-turn command, so nothing was changed.\n'
+      );
       return;
     }
 

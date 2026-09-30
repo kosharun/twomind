@@ -1,11 +1,13 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { safeJsonParse } from '../core/util.js';
 
 /**
- * Installing our capture hooks into each agent, without stepping on the user's
- * own configuration.
+ * Connecting Twomind to each agent without stepping on the user's own
+ * configuration. Claude uses project hooks. Codex uses its user-level
+ * end-of-turn notification because project hooks need a separate trust step.
  *
  * Rules we hold ourselves to:
  *  - never overwrite an existing settings file; read, merge, write back
@@ -20,6 +22,13 @@ export interface InstallResult {
   agent: AgentId;
   file: string;
   action: 'created' | 'updated' | 'already-installed';
+  backup?: string;
+  note?: string;
+}
+
+export interface CodexNotifyResult {
+  file: string;
+  action: 'created' | 'updated' | 'already-installed' | 'kept-existing';
   backup?: string;
   note?: string;
 }
@@ -64,10 +73,152 @@ function shellSafePath(p: string): string {
 
 /** Absolute invocation of this CLI, safe to paste into a hook config. */
 export function selfCommand(subcommand: string): string {
+  const cli = selfCliPath();
+  return `${shellSafePath(process.execPath)} ${shellSafePath(cli)} ${subcommand}`;
+}
+
+function selfCliPath(): string {
   const here = fileURLToPath(import.meta.url);
   // dist/adapters/install.js -> dist/cli.js
-  const cli = path.resolve(path.dirname(here), '..', 'cli.js');
-  return `${shellSafePath(process.execPath)} ${shellSafePath(cli)} ${subcommand}`;
+  return path.resolve(path.dirname(here), '..', 'cli.js');
+}
+
+/** argv form used by Codex's user-level `notify` setting. */
+export function selfCommandArgs(...args: string[]): string[] {
+  return [process.execPath, selfCliPath(), ...args];
+}
+
+function codexConfigFile(): string {
+  const codexHome = process.env.CODEX_HOME
+    ? path.resolve(process.env.CODEX_HOME)
+    : path.join(homedir(), '.codex');
+  return path.join(codexHome, 'config.toml');
+}
+
+function lineEndingOf(text: string): '\r\n' | '\n' {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function firstTableIndex(text: string): number {
+  const match = /^[ \t]*\[{1,2}[^\r\n]+/m.exec(text);
+  return match?.index ?? text.length;
+}
+
+function topLevelNotifyMatch(text: string): RegExpExecArray | null {
+  const beforeTables = text.slice(0, firstTableIndex(text));
+  return /^[ \t]*notify[ \t]*=[^\r\n]*(?:\r?\n|$)/m.exec(beforeTables);
+}
+
+function isOurCodexNotify(text: string): boolean {
+  return /["']notify["'][ \t]*,[ \t]*["']codex["']/.test(text) && /cli\.js/.test(text);
+}
+
+function tomlStringArray(values: string[]): string {
+  // JSON basic strings are valid TOML basic strings for these paths and words.
+  return `[${values.map((value) => JSON.stringify(value)).join(', ')}]`;
+}
+
+function parseNotifyCommand(assignment: string): string[] | null {
+  const equals = assignment.indexOf('=');
+  if (equals === -1) return null;
+  try {
+    const value = JSON.parse(assignment.slice(equals + 1).trim()) as unknown;
+    return Array.isArray(value) && value.every((item) => typeof item === 'string')
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function previousNotify(command: string[]): string[] {
+  const marker = command.indexOf('--then');
+  return marker === -1 ? [] : command.slice(marker + 1);
+}
+
+/**
+ * Connect the Codex VS Code extension through its supported end-of-turn
+ * notification. Unlike project hooks, this does not need hook trust.
+ */
+export function installCodexNotify(root: string): CodexNotifyResult {
+  const file = codexConfigFile();
+  const existing = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const found = topLevelNotifyMatch(existing);
+  const currentCommand = found ? parseNotifyCommand(found[0]) : null;
+
+  if (found && !currentCommand) {
+    return {
+      file,
+      action: 'kept-existing',
+      note: 'You already have a Codex end-of-turn command that Twomind could not safely read, so it was left alone. Automatic Codex stories are off. You can use "twomind record" by hand.',
+    };
+  }
+
+  const oldCommand = currentCommand
+    ? isOurCodexNotify(found?.[0] ?? '')
+      ? previousNotify(currentCommand)
+      : currentCommand
+    : [];
+  const command = [
+    ...selfCommandArgs('notify', 'codex'),
+    ...(oldCommand.length ? ['--then', ...oldCommand] : []),
+  ];
+  const desired = `notify = ${tomlStringArray(command)}`;
+
+  const newline = lineEndingOf(existing);
+  let next: string;
+  let action: CodexNotifyResult['action'];
+  if (found) {
+    const old = found[0].replace(/\r?\n$/, '');
+    if (old.trim() === desired) return { file, action: 'already-installed' };
+    next = existing.slice(0, found.index) + desired + (found[0].endsWith('\n') ? newline : '') + existing.slice(found.index + found[0].length);
+    action = 'updated';
+  } else {
+    const at = firstTableIndex(existing);
+    const before = existing.slice(0, at);
+    const after = existing.slice(at);
+    const prefix = before.length > 0 && !before.endsWith('\n') ? newline : '';
+    const suffix = after.length > 0 ? newline : '';
+    next = `${before}${prefix}${desired}${newline}${suffix}${after}`;
+    action = existing ? 'updated' : 'created';
+  }
+
+  const bak = existing ? backup(root, file) : undefined;
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, next, 'utf8');
+  return {
+    file,
+    action,
+    backup: bak,
+    note: oldCommand.length
+      ? 'Twomind kept your existing Codex end-of-turn command and will run it after saving the story.'
+      : undefined,
+  };
+}
+
+export function codexNotifyInstalled(): boolean {
+  const file = codexConfigFile();
+  if (!existsSync(file)) return false;
+  const found = topLevelNotifyMatch(readFileSync(file, 'utf8'));
+  return Boolean(found && isOurCodexNotify(found[0]));
+}
+
+/** Remove only Twomind's user-level Codex notification, never another one. */
+export function uninstallCodexNotify(): CodexNotifyResult | null {
+  const file = codexConfigFile();
+  if (!existsSync(file)) return null;
+  const existing = readFileSync(file, 'utf8');
+  const found = topLevelNotifyMatch(existing);
+  if (!found || !isOurCodexNotify(found[0])) return null;
+  const command = parseNotifyCommand(found[0]) ?? [];
+  const oldCommand = previousNotify(command);
+  const newline = lineEndingOf(existing);
+  const replacement = oldCommand.length
+    ? `notify = ${tomlStringArray(oldCommand)}${found[0].endsWith('\n') ? newline : ''}`
+    : '';
+  const next = existing.slice(0, found.index) + replacement + existing.slice(found.index + found[0].length);
+  writeFileSync(file, next, 'utf8');
+  return { file, action: 'updated' };
 }
 
 function agentFile(root: string, agent: AgentId): string {
@@ -158,10 +309,6 @@ export function installHooks(root: string, agent: AgentId): InstallResult {
     file,
     action: existingRaw ? (alreadyInstalled ? 'already-installed' : 'updated') : 'created',
     backup: bak,
-    note:
-      agent === 'codex'
-        ? 'Codex asks you to trust project hooks before they run. Open Codex and run /hooks once.'
-        : undefined,
   };
 }
 

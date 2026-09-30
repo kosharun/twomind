@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { isOurHookCommand } from '../adapters/install.js';
+import { codexNotifyInstalled, isOurHookCommand } from '../adapters/install.js';
 import { loadConfig } from '../core/config.js';
 import { FALLBACK_FILE } from '../core/debuglog.js';
 import { findProjectRoot, isInitialised, resolveProjectPaths } from '../core/paths.js';
@@ -87,7 +87,8 @@ export async function doctor(cwd = process.cwd()): Promise<void> {
   const claudeFile = path.join(root, '.claude', 'settings.json');
   const codexFile = path.join(root, '.codex', 'hooks.json');
   const claudeOk = hookInstalled(claudeFile);
-  const codexOk = hookInstalled(codexFile);
+  const oldCodexHooks = hookInstalled(codexFile);
+  const codexOk = codexNotifyInstalled();
 
   checks.push({
     name: 'Claude Code hooks',
@@ -96,13 +97,13 @@ export async function doctor(cwd = process.cwd()): Promise<void> {
     fix: 'Run "twomind refresh" to install them.',
   });
   checks.push({
-    name: 'Codex hooks',
+    name: 'Codex extension save',
     ok: codexOk,
-    detail: codexOk ? 'installed' : 'not installed',
-    fix: 'Run "twomind refresh", then run /hooks inside Codex to trust them.',
+    detail: codexOk ? 'end-of-turn command installed' : 'not installed',
+    fix: 'Run "twomind refresh". You do not need the separate Codex terminal app.',
   });
 
-  if (claudeOk || codexOk) {
+  if (claudeOk || oldCodexHooks) {
     const safe = hookSafeForBash(claudeFile) && hookSafeForBash(codexFile);
     checks.push({
       name: 'hook paths',
@@ -158,8 +159,7 @@ export async function doctor(cwd = process.cwd()): Promise<void> {
     console.log(`  ${failing.length} thing${failing.length === 1 ? '' : 's'} to fix, listed above.`);
   }
   console.log('');
-  console.log(c.dim('  Note: Claude Code and Codex read their hook settings at startup.'));
-  console.log(c.dim('  If you just installed them, restart the agent before testing.'));
+  console.log(c.dim('  Note: if Codex was already open when you ran init or refresh, reload VS Code once.'));
   console.log('');
   console.log(c.dim(`  Hook activity log: ${path.join(root, '.twomind', '.local', 'hook.log')}`));
   console.log(c.dim(`  Fallback log (used even if the project could not be found): ${FALLBACK_FILE}`));
