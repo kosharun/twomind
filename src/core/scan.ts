@@ -66,7 +66,7 @@ function countExtensions(root: string, maxFiles = 4000): Map<string, number> {
   let seen = 0;
 
   const walk = (dir: string, depth: number) => {
-    if (seen >= maxFiles || depth > 6) return;
+    if (seen >= maxFiles || depth > 12) return;
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -94,12 +94,23 @@ function countExtensions(root: string, maxFiles = 4000): Map<string, number> {
 const LANGUAGE_BY_EXT: Record<string, string> = {
   '.ts': 'TypeScript', '.tsx': 'TypeScript', '.js': 'JavaScript', '.jsx': 'JavaScript',
   '.mjs': 'JavaScript', '.cjs': 'JavaScript', '.py': 'Python', '.go': 'Go', '.rs': 'Rust',
-  '.java': 'Java', '.kt': 'Kotlin', '.rb': 'Ruby', '.php': 'PHP', '.cs': 'C#',
-  '.swift': 'Swift', '.vue': 'Vue', '.svelte': 'Svelte', '.sql': 'SQL',
+  '.java': 'Java', '.kt': 'Kotlin', '.kts': 'Kotlin', '.scala': 'Scala', '.groovy': 'Groovy',
+  '.rb': 'Ruby', '.php': 'PHP', '.cs': 'C#', '.fs': 'F#', '.fsx': 'F#',
+  '.swift': 'Swift', '.dart': 'Dart', '.c': 'C', '.h': 'C/C++', '.cc': 'C++',
+  '.cpp': 'C++', '.cxx': 'C++', '.hpp': 'C++', '.m': 'Objective-C', '.mm': 'Objective-C++',
+  '.ex': 'Elixir', '.exs': 'Elixir', '.erl': 'Erlang', '.hrl': 'Erlang', '.lua': 'Lua',
+  '.r': 'R', '.jl': 'Julia', '.pl': 'Perl', '.pm': 'Perl', '.sh': 'Shell', '.bash': 'Shell',
+  '.zsh': 'Shell', '.ps1': 'PowerShell', '.sql': 'SQL', '.sol': 'Solidity', '.move': 'Move',
+  '.zig': 'Zig', '.nim': 'Nim', '.clj': 'Clojure', '.cljs': 'ClojureScript', '.hs': 'Haskell',
+  '.vue': 'Vue', '.svelte': 'Svelte',
 };
 
 export function scanProject(root: string): ScanResult {
   const pkg = readJson<Record<string, any>>(path.join(root, 'package.json'), {});
+  const pomFile = path.join(root, 'pom.xml');
+  const pom = existsSync(pomFile) ? readFileSync(pomFile, 'utf8') : '';
+  const gradleFile = ['build.gradle', 'build.gradle.kts'].map((name) => path.join(root, name)).find(existsSync);
+  const gradle = gradleFile ? readFileSync(gradleFile, 'utf8') : '';
   const deps: Record<string, string> = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
   const depNames = Object.keys(deps);
 
@@ -131,6 +142,7 @@ export function scanProject(root: string): ScanResult {
   if (existsSync(path.join(root, 'manage.py'))) frameworks.push('Django');
   if (existsSync(path.join(root, 'Gemfile'))) frameworks.push('Rails');
   if (existsSync(path.join(root, 'artisan'))) frameworks.push('Laravel');
+  if (/org\.springframework|spring-boot/i.test(`${pom}\n${gradle}`)) frameworks.push('Spring');
 
   const databases: string[] = [];
   if (has('mongoose') || has('mongodb')) databases.push('MongoDB');
@@ -139,15 +151,26 @@ export function scanProject(root: string): ScanResult {
   if (has('sqlite3') || has('better-sqlite3')) databases.push('SQLite');
   if (has('redis') || has('ioredis')) databases.push('Redis');
   if (has('prisma') || has('@prisma/client')) databases.push('Prisma');
+  if (/postgresql/i.test(`${pom}\n${gradle}`)) databases.push('PostgreSQL');
+  if (/mysql/i.test(`${pom}\n${gradle}`)) databases.push('MySQL');
+  if (/mongodb/i.test(`${pom}\n${gradle}`)) databases.push('MongoDB');
+  if (/h2database/i.test(`${pom}\n${gradle}`)) databases.push('H2');
 
   let packageManager: string | null = null;
   if (existsSync(path.join(root, 'pnpm-lock.yaml'))) packageManager = 'pnpm';
   else if (existsSync(path.join(root, 'yarn.lock'))) packageManager = 'yarn';
   else if (existsSync(path.join(root, 'package-lock.json'))) packageManager = 'npm';
   else if (existsSync(path.join(root, 'requirements.txt')) || existsSync(path.join(root, 'pyproject.toml'))) packageManager = 'pip';
+  else if (existsSync(pomFile)) packageManager = 'Maven';
+  else if (gradleFile) packageManager = 'Gradle';
 
   const scripts: Record<string, string> = pkg.scripts ?? {};
-  const testCommand = scripts.test ? `${packageManager ?? 'npm'} test` : null;
+  let testCommand = scripts.test ? `${packageManager ?? 'npm'} test` : null;
+  if (!testCommand && existsSync(pomFile)) {
+    testCommand = existsSync(path.join(root, 'mvnw.cmd')) ? '.\\mvnw.cmd test' : 'mvn test';
+  } else if (!testCommand && gradleFile) {
+    testCommand = existsSync(path.join(root, 'gradlew.bat')) ? '.\\gradlew.bat test' : 'gradle test';
+  }
 
   const topFolders: string[] = [];
   collectDir(root, topFolders, 1);

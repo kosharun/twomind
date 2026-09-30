@@ -176,6 +176,10 @@ class Resolver {
       case 'name': {
         const local = this.localFunction(fn, callee.name);
         if (local) return { kind: 'fn', id: local };
+        // Java, Python and several other languages let one method call another
+        // method on the same object without writing `this.` or `self.`.
+        const ownMethod = owner ? this.method(fn.file, owner, callee.name) : NONE;
+        if (ownMethod.kind !== 'none') return ownMethod;
         const value = this.nameValue(facts, callee.name, 0);
         if (value) return this.callValue(value);
         const made = this.madeByPackage(fn, callee.name, depth);
@@ -195,10 +199,25 @@ class Resolver {
       case 'member': {
         const type = this.localType(fn, callee.object);
         if (type) return this.methodOfType(fn.file, type, callee.name);
+        // `repository.save()` is commonly a field call in Java and C#.
+        // Those languages do not require the explicit `this.repository` form.
+        const fieldType = owner ? facts.classes[owner]?.fields[callee.object] : undefined;
+        if (fieldType) {
+          const fieldMethod = this.methodOfType(fn.file, fieldType, callee.name);
+          if (fieldMethod.kind !== 'none') return fieldMethod;
+        }
         if (this.localFunction(fn, callee.object)) return NONE;
+        if (/^[A-Z]/.test(callee.object)) {
+          const classMethod = this.methodOfType(fn.file, callee.object, callee.name);
+          if (classMethod.kind !== 'none') return classMethod;
+        }
         const value = this.nameValue(facts, callee.object, 0);
         const member = value ? this.member(value, callee.name, 0) : null;
         if (member) return this.callValue(member);
+        // Static calls such as `TicketMapper.toDto()` can be resolved when the
+        // class name is unique in this project, even without an import map.
+        const classMethod = this.methodOfType(fn.file, callee.object, callee.name);
+        if (classMethod.kind !== 'none') return classMethod;
         const made = this.madeByPackage(fn, callee.object, depth);
         return made ? this.external(made, `${callee.object}.${callee.name}`) : NONE;
       }

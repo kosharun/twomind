@@ -36,6 +36,8 @@ export interface CodexNotifyResult {
 interface HookCommand {
   type: 'command';
   command: string;
+  args?: string[];
+  timeout?: number;
 }
 
 interface HookMatcher {
@@ -252,20 +254,34 @@ function backup(root: string, file: string): string | undefined {
 }
 
 /** Exported so every other command checks "is this hook ours?" the same way. */
-export function isOurHookCommand(command: string | undefined): boolean {
-  return MARKER.test(command ?? '');
+export function isOurHookCommand(command: string | undefined, args: string[] = []): boolean {
+  return MARKER.test([command ?? '', ...args].join(' '));
 }
 
 function hasOurHook(entries: HookMatcher[] | undefined): boolean {
   if (!entries) return false;
-  return entries.some((entry) => (entry.hooks ?? []).some((h) => isOurHookCommand(h.command)));
+  return entries.some((entry) => (entry.hooks ?? []).some((h) => isOurHookCommand(h.command, h.args)));
 }
 
 function stripOurHooks(entries: HookMatcher[] | undefined): HookMatcher[] {
   if (!entries) return [];
   return entries
-    .map((entry) => ({ ...entry, hooks: (entry.hooks ?? []).filter((h) => !isOurHookCommand(h.command)) }))
+    .map((entry) => ({ ...entry, hooks: (entry.hooks ?? []).filter((h) => !isOurHookCommand(h.command, h.args)) }))
     .filter((entry) => (entry.hooks ?? []).length > 0);
+}
+
+/**
+ * Claude accepts an executable plus an argument list. This avoids asking a
+ * shell to split a long command string, so paths with spaces and Windows path
+ * rules cannot change what gets executed.
+ */
+function hookCommand(event: 'prompt' | 'stop', agent: AgentId): HookCommand {
+  return {
+    type: 'command',
+    command: process.execPath,
+    args: [selfCliPath(), 'hook', event, '--agent', agent],
+    timeout: 30,
+  };
 }
 
 export function installHooks(root: string, agent: AgentId): InstallResult {
@@ -286,8 +302,8 @@ export function installHooks(root: string, agent: AgentId): InstallResult {
   const preToolEntries = stripOurHooks(settings.hooks.PreToolUse);
   const postToolEntries = stripOurHooks(settings.hooks.PostToolUse);
 
-  promptEntries.push({ hooks: [{ type: 'command', command: selfCommand(`hook prompt --agent ${agent}`) }] });
-  stopEntries.push({ hooks: [{ type: 'command', command: selfCommand(`hook stop --agent ${agent}`) }] });
+  promptEntries.push({ hooks: [hookCommand('prompt', agent)] });
+  stopEntries.push({ hooks: [hookCommand('stop', agent)] });
 
   settings.hooks.UserPromptSubmit = promptEntries;
   settings.hooks.Stop = stopEntries;

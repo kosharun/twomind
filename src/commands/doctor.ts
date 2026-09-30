@@ -24,19 +24,29 @@ interface Check {
   fix?: string;
 }
 
-function ourHookCommands(file: string): string[] {
+interface InstalledHook {
+  command: string;
+  args: string[];
+}
+
+function ourHookCommands(file: string, event?: 'UserPromptSubmit' | 'Stop'): InstalledHook[] {
   if (!existsSync(file)) return [];
   const settings = safeJsonParse<any>(readFileSync(file, 'utf8'), {});
   const events = settings?.hooks ?? {};
-  const listed = [...(events.UserPromptSubmit ?? []), ...(events.Stop ?? [])];
+  const listed = event
+    ? events[event] ?? []
+    : [...(events.UserPromptSubmit ?? []), ...(events.Stop ?? [])];
   return listed
     .flatMap((entry: any) => entry.hooks ?? [])
-    .map((h: any) => String(h.command ?? ''))
-    .filter((command: string) => isOurHookCommand(command));
+    .map((h: any) => ({
+      command: String(h.command ?? ''),
+      args: Array.isArray(h.args) ? h.args.map(String) : [],
+    }))
+    .filter((hook: InstalledHook) => isOurHookCommand(hook.command, hook.args));
 }
 
 function hookInstalled(file: string): boolean {
-  return ourHookCommands(file).length > 0;
+  return ourHookCommands(file, 'UserPromptSubmit').length > 0 && ourHookCommands(file, 'Stop').length > 0;
 }
 
 /**
@@ -45,7 +55,7 @@ function hookInstalled(file: string): boolean {
  * time, silently. This is the bug that hid every story at first.
  */
 function hookSafeForBash(file: string): boolean {
-  return ourHookCommands(file).every((command) => !command.includes('\\'));
+  return ourHookCommands(file).every((hook) => hook.args.length > 0 || !hook.command.includes('\\'));
 }
 
 /** Why isn't it capturing? Answer that in one command. */

@@ -14,6 +14,7 @@ import { buildFlowGraph } from '../core/flow/graph.js';
 import { FLOW_EXTENSIONS } from '../core/flow/parse.js';
 import { flowStarts, searchFunctions } from '../core/flow/resolve.js';
 import { changedFunctionsIn, reliableChangedLines } from '../core/flow/stories.js';
+import { recordNow } from '../commands/record.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(here, 'public');
@@ -336,11 +337,14 @@ export async function serve(options: ServeOptions): Promise<void> {
       }
 
       if (route === '/api/map/search') {
-        // JS and TS functions are searched as flows. This covers the rest:
-        // other languages, and classes and types, which have no flow of their own.
+        // Functions understood by a flow reader are searched above. This adds
+        // classes, types, file paths, and names from every other readable file.
         const results = searchSymbols(codeMap.get(), url.searchParams.get('q') ?? '').filter(
           (hit) =>
-            !FLOW_EXTENSIONS.has(path.extname(hit.file).toLowerCase()) || hit.kind === 'class' || hit.kind === 'type'
+            !FLOW_EXTENSIONS.has(path.extname(hit.file).toLowerCase()) ||
+            hit.kind === 'class' ||
+            hit.kind === 'type' ||
+            hit.kind === 'file'
         );
         sendJson(res, 200, { results });
         return;
@@ -431,9 +435,42 @@ export async function serve(options: ServeOptions): Promise<void> {
     }, 2000);
   }
 
-  // No file watcher that guesses at changes: stories are written only by the
-  // agent's own hooks (or `twomind record`), with the agent's own explanation.
-  // This server just shows them, and pushes an update the moment one lands.
+  // Claude normally records through its Stop hook. If Claude wrote the note but
+  // that final hook was blocked by workspace trust, a shell difference, or an
+  // extension problem, the open dashboard is a second safe path. It waits so
+  // the normal hook gets the first chance, then records only while the note is
+  // still present. After a successful hook, recordNow sees the same saved
+  // snapshot and exits without creating another story.
+  const noteFile = path.join(paths.local, 'note.json');
+  let noteTimer: NodeJS.Timeout | null = null;
+  let noteRecording = false;
+  const scheduleNoteBackup = () => {
+    if (noteTimer) clearTimeout(noteTimer);
+    noteTimer = setTimeout(async () => {
+      noteTimer = null;
+      if (noteRecording || !existsSync(noteFile)) return;
+      noteRecording = true;
+      try {
+        const result = await recordNow(root, { agent: 'dashboard backup', source: 'record' });
+        if (result.startsWith('Saved:')) {
+          codeMap.invalidate();
+          flows.get(true);
+          broadcast('stories');
+        }
+      } finally {
+        noteRecording = false;
+      }
+    }, 5000);
+  };
+  try {
+    watch(paths.local, (_event, filename) => {
+      if (String(filename ?? '').replace(/\\/g, '/') === 'note.json') scheduleNoteBackup();
+    });
+    if (existsSync(noteFile)) scheduleNoteBackup();
+  } catch {
+    // Hooks and `twomind record` still work when this optional watcher is not
+    // available on a filesystem.
+  }
 
   await new Promise<void>((resolve) => {
     server.listen(options.port, '127.0.0.1', resolve);

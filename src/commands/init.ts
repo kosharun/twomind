@@ -2,7 +2,6 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import {
-  detectAgents,
   installCodexNotify,
   installHooks,
   uninstallHooks,
@@ -193,10 +192,6 @@ export async function init(options: InitOptions): Promise<void> {
     return;
   }
 
-  // Detect agents BEFORE we write anything, otherwise our own AGENTS.md
-  // would look like evidence that the user already uses Codex.
-  const detected = detectAgents(root);
-
   const scan = scanProject(root);
   console.log(c.bold('  What I found'));
   console.log(`    languages   ${scan.languages.join(', ') || 'unknown'}`);
@@ -237,11 +232,10 @@ export async function init(options: InitOptions): Promise<void> {
   }
   await ensureStartingPoint(root);
 
-  const targets: AgentId[] = detected.length ? [...detected] : ['claude', 'codex'];
-  // Codex's end-of-turn command is a user-level setting shared by the IDE.
-  // Install it on every init so a project never misses Codex support merely
-  // because it happened to contain only Claude files when we scanned it.
-  if (!targets.includes('codex')) targets.push('codex');
+  // Connect both supported agents every time. A project should keep working if
+  // somebody starts with Codex today and opens the same folder in Claude next
+  // week, without needing to remember another setup command.
+  const targets: AgentId[] = ['claude', 'codex'];
   console.log('');
   console.log(c.bold('  Connected agents'));
   for (const agent of targets) {

@@ -86,8 +86,7 @@ export async function showMap(onOpenStory) {
     : '';
 
   const noFlows = !flow.functionCount
-    ? `<div class="block"><p class="fp-none">Flows work for JavaScript and TypeScript. This project has none of those
-        files, so only the name search below works here.</p></div>`
+    ? `<div class="block"><p class="fp-none">Twomind mapped the project files and names, but it did not find a function body it could safely draw as a flow.</p></div>`
     : '';
 
   const busiest = map.busiest.length
@@ -109,7 +108,7 @@ export async function showMap(onOpenStory) {
     <div class="head">
       <h1 class="title">Code map</h1>
       <div class="head-meta">
-        <span>${plural(flow.fileCount, 'JS/TS file')}</span>
+        <span>${plural(map.fileCount, 'source file')}</span>
         <span>${plural(flow.functionCount, 'function')}</span>
         <span>read ${ago(flow.builtAt)}</span>
         ${flow.unreadable.length ? `<span title="${esc(flow.unreadable.join('\n'))}">${plural(flow.unreadable.length, 'file')} could not be read</span>` : ''}

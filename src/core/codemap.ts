@@ -23,7 +23,7 @@ export interface SymbolDef {
   /** Repo-relative, forward slashes. */
   file: string;
   line: number;
-  kind: 'function' | 'class' | 'component' | 'type' | 'const';
+  kind: 'function' | 'class' | 'component' | 'type' | 'const' | 'file';
   exported: boolean;
 }
 
@@ -51,7 +51,29 @@ const SKIP_DIRS = new Set([
   'graphify-out', '.svelte-kit', '.turbo', 'bin', 'obj',
 ]);
 
-const CODE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rb', '.php', '.java', '.cs', '.vue', '.svelte']);
+export const CODE_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue', '.svelte',
+  '.py', '.pyw', '.rb', '.php', '.java', '.kt', '.kts', '.scala', '.groovy',
+  '.go', '.rs', '.cs', '.fs', '.fsx', '.swift', '.dart',
+  '.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.m', '.mm',
+  '.ex', '.exs', '.erl', '.hrl', '.lua', '.r', '.jl', '.pl', '.pm',
+  '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+  '.sql', '.graphql', '.gql', '.proto', '.sol', '.move', '.zig', '.nim',
+  '.tf', '.hcl', '.nix', '.clj', '.cljs', '.cljc', '.hs', '.lhs',
+  '.html', '.htm', '.css', '.scss', '.sass', '.less',
+  '.xml', '.xsl', '.xslt', '.yaml', '.yml', '.toml', '.json',
+]);
+
+const SOURCE_FILENAMES = new Set([
+  'dockerfile', 'makefile', 'jenkinsfile', 'procfile', 'rakefile', 'gemfile',
+  'vagrantfile', 'justfile', 'meson.build', 'cmakelists.txt',
+]);
+
+const NON_SOURCE_EXTENSIONS = new Set([
+  '.md', '.txt', '.log', '.lock', '.csv', '.tsv', '.pdf', '.png', '.jpg', '.jpeg',
+  '.gif', '.webp', '.ico', '.zip', '.gz', '.jar', '.war', '.class', '.dll', '.exe',
+  '.map', '.min', '.pem', '.key', '.crt', '.p12', '.pfx',
+]);
 
 const MAX_FILES = 4000;
 const MAX_FILE_BYTES = 500_000;
@@ -74,6 +96,13 @@ const DEFINITION_PATTERNS: Pattern[] = [
   { re: /^[ \t]*(?:export\s+)?(?:interface|type)\s+([A-Za-z_$][\w$]*)/gm, kind: 'type' },
   { re: /^[ \t]*def\s+([A-Za-z_]\w*)\s*\(/gm, kind: 'function' },
   { re: /^[ \t]*func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)\s*\(/gm, kind: 'function' },
+  { re: /^[ \t]*(?:(?:public|private|protected|internal|static|final|abstract|sealed|partial|open|data)\s+)*(?:class|interface|record|enum|struct|trait|object|protocol)\s+([A-Za-z_$][\w$]*)/gm, kind: 'class' },
+  { re: /^[ \t]*(?:(?:public|private|protected|internal|static|final|abstract|synchronized|native|default|virtual|override|async|unsafe|extern|inline|constexpr)\s+)*(?:<[^>\n]+>\s*)?(?:[A-Za-z_$][\w$.[\]<>?,]*\s+)+([A-Za-z_$][\w$]*)\s*\([^;{}\n]*\)\s*(?:throws\b[^\n{]*)?\{/gm, kind: 'function' },
+  { re: /^[ \t]*(?:export\s+)?(?:async\s+)?(?:fun|fn|func)\s+(?:\([^)]*\)\s*)?([A-Za-z_$][\w$]*)\s*\(/gm, kind: 'function' },
+  { re: /^[ \t]*(?:(?:public|private|protected|static|final)\s+)*function\s+&?\s*([A-Za-z_$][\w$]*)\s*\(/gm, kind: 'function' },
+  { re: /^[ \t]*(?:local\s+)?function\s+([A-Za-z_$][\w$.:]*)\s*\(/gm, kind: 'function' },
+  { re: /^[ \t]*([A-Za-z_][\w]*)\s*\(\s*\)\s*\{/gm, kind: 'function' },
+  { re: /^[ \t]*CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s+([A-Za-z_][\w.]*)/gim, kind: 'function' },
 ];
 
 const IMPORT_PATTERNS: RegExp[] = [
@@ -81,6 +110,11 @@ const IMPORT_PATTERNS: RegExp[] = [
   /^[ \t]*import\s+['"]([^'"]+)['"]/gm,
   /require\(\s*['"]([^'"]+)['"]\s*\)/gm,
   /^[ \t]*from\s+([\w.]+)\s+import\b/gm,
+  /^[ \t]*import\s+(?:static\s+)?([\w.*]+)\s*;/gm,
+  /^[ \t]*using\s+([\w.]+)\s*;/gm,
+  /^[ \t]*use\s+([\w:]+)(?:::\{[^}]+\})?\s*;/gm,
+  /^[ \t]*#\s*include\s*[<"]([^>"]+)[>"]/gm,
+  /^[ \t]*(?:require|require_relative)\s*\(?\s*['"]([^'"]+)['"]/gm,
 ];
 
 /** Names so common that "who uses this" would be pure noise. */
@@ -96,7 +130,26 @@ const isNoise = (name: string): boolean =>
 
 const rel = (root: string, file: string): string => path.relative(root, file).replace(/\\/g, '/');
 
-export function listCodeFiles(root: string, extensions: Set<string> = CODE_EXT): { files: string[]; skipped: number } {
+function looksLikeSourceFile(file: string, name: string): boolean {
+  const lower = name.toLowerCase();
+  const extension = path.extname(lower);
+  if (name.startsWith('.')) return false;
+  if (CODE_EXTENSIONS.has(extension) || SOURCE_FILENAMES.has(lower)) return true;
+  if (NON_SOURCE_EXTENSIONS.has(extension)) return false;
+
+  try {
+    const bytes = readFileSync(file);
+    if (bytes.includes(0)) return false;
+    const text = bytes.toString('utf8');
+    const controls = [...text].filter((char) => char < ' ' && char !== '\n' && char !== '\r' && char !== '\t').length;
+    if (controls > Math.max(2, text.length / 100)) return false;
+    return /[{}();=]|^\s*(?:class|def|fn|func|function|module|package|import|using|use|resource|provider|#\s*include)\b/m.test(text);
+  } catch {
+    return false;
+  }
+}
+
+export function listCodeFiles(root: string, extensions?: Set<string>): { files: string[]; skipped: number } {
   const files: string[] = [];
   let skipped = 0;
 
@@ -114,7 +167,8 @@ export function listCodeFiles(root: string, extensions: Set<string> = CODE_EXT):
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
         walk(full, depth + 1);
-      } else if (extensions.has(path.extname(entry.name).toLowerCase())) {
+      } else {
+        const extension = path.extname(entry.name).toLowerCase();
         try {
           if (statSync(full).size > MAX_FILE_BYTES) {
             skipped += 1;
@@ -123,6 +177,8 @@ export function listCodeFiles(root: string, extensions: Set<string> = CODE_EXT):
         } catch {
           continue;
         }
+        const allowed = extensions ? extensions.has(extension) : looksLikeSourceFile(full, entry.name);
+        if (!allowed) continue;
         files.push(full);
       }
     }
@@ -155,7 +211,7 @@ function definitionsIn(text: string, file: string): SymbolDef[] {
         file,
         line: lineOf(text, match.index),
         kind: isComponent ? 'component' : kind,
-        exported: /^[ \t]*export\b/.test(match[0]),
+        exported: /\b(?:export|public|pub)\b/.test(match[0]),
       });
     }
   }
@@ -165,17 +221,27 @@ function definitionsIn(text: string, file: string): SymbolDef[] {
 
 /** Turn `../services/auth` into a repo-relative path we can actually link to. */
 function resolveImport(root: string, fromFile: string, spec: string, known: Set<string>): string | null {
-  if (!spec.startsWith('.')) return null;
-  const base = path.resolve(path.dirname(fromFile), spec);
-  const candidates = [
-    base,
-    ...['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue', '.svelte'].map((ext) => base + ext),
-    ...['index.ts', 'index.tsx', 'index.js', 'index.jsx'].map((name) => path.join(base, name)),
-  ];
-  for (const candidate of candidates) {
-    const relative = rel(root, candidate);
-    if (known.has(relative)) return relative;
+  if (spec.startsWith('.')) {
+    const base = path.resolve(path.dirname(fromFile), spec);
+    const candidates = [
+      base,
+      ...[...CODE_EXTENSIONS].map((ext) => base + ext),
+      ...['index.ts', 'index.tsx', 'index.js', 'index.jsx', '__init__.py'].map((name) => path.join(base, name)),
+    ];
+    for (const candidate of candidates) {
+      const relative = rel(root, candidate);
+      if (known.has(relative)) return relative;
+    }
+    return null;
   }
+
+  if (spec.endsWith('*')) return null;
+  const suffix = spec.replace(/::/g, '/').replace(/\./g, '/').replace(/^\/+/, '');
+  const matches = [...known].filter((candidate) => {
+    const withoutExtension = candidate.slice(0, candidate.length - path.extname(candidate).length);
+    return withoutExtension === suffix || withoutExtension.endsWith(`/${suffix}`);
+  });
+  if (matches.length === 1) return matches[0];
   return null;
 }
 
@@ -199,6 +265,7 @@ export function buildCodeMap(root: string): CodeMap {
 
     const defined = definitionsIn(text, file);
     symbols.push(...defined);
+    symbols.push({ name: file, file, line: 1, kind: 'file', exported: false });
 
     const imports = new Set<string>();
     for (const re of IMPORT_PATTERNS) {
@@ -221,7 +288,7 @@ export function buildCodeMap(root: string): CodeMap {
   // Who mentions each name. One scan per file against the names we know about,
   // using a word-boundary match so `pay` does not match `payment`.
   const usedBy: Record<string, string[]> = {};
-  const interesting = symbols.filter((s) => !isNoise(s.name));
+  const interesting = symbols.filter((s) => s.kind !== 'file' && !isNoise(s.name));
 
   for (const [file, text] of contents) {
     for (const symbol of interesting) {

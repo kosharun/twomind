@@ -16,11 +16,15 @@ map and a dashboard for catching up later.
 Twomind works with Claude Code and the Codex extension. Your data stays inside
 your project.
 
-## Install
+## Step 1: Install the `twomind` command
 
 You need [Node.js 20 or newer](https://nodejs.org/).
 
-Install Twomind from npm:
+There are two ways to install Twomind. Choose one. You do not need to do both.
+
+### Option A: Install from npm
+
+This is the normal and easiest way:
 
 ```bash
 npm install --global twomind
@@ -32,9 +36,14 @@ Check that it works:
 twomind --version
 ```
 
-### Install from GitHub instead
+If you see a version number, Twomind is installed. Skip Option B and go to Step 2.
 
-You can also install Twomind from its source code:
+> Stop here if Option A worked. Option B is a different way to install the same command.
+
+### Option B: Install from GitHub instead
+
+Use this only if you want to install the source code from GitHub. Do not use it
+after installing from npm.
 
 ```bash
 git clone https://github.com/kosharun/twomind.git
@@ -46,9 +55,15 @@ npm run install-global
 This installs a separate global copy. The `twomind` command will keep working
 if you move or delete the cloned folder.
 
-## Add Twomind to a project
+## Step 2: Connect Twomind to your project
 
-Open one of your Git projects and run:
+This is the last setup step.
+
+Twomind works one project at a time. Installing the command in Step 1 does not
+connect it to your projects. You must run `twomind init` inside every project
+where you want Twomind to work.
+
+Open a terminal inside your project folder, then run:
 
 ```bash
 cd path/to/your-project
@@ -58,8 +73,14 @@ twomind init
 Twomind checks the project and asks you 12 short questions about how you work.
 It then connects itself to Claude Code and Codex.
 
+You only need to do this once for each project. If you start another project
+later, open that folder and run `twomind init` there too.
+
 If you already have an `AGENTS.md` or `CLAUDE.md`, your rules stay in place.
 Twomind adds only a small marked section, and your own rules always win.
+
+If Claude Code asks whether you trust the project folder, approve it so the
+project hooks can run.
 
 If Codex was already open, reload the VS Code window once.
 
@@ -74,8 +95,6 @@ twomind serve
 Then work with Claude Code or Codex as usual. When the agent finishes a task,
 Twomind saves the story automatically. The dashboard does not need to stay open
 for this to work.
-
-For every other project, run `twomind init` once inside that project.
 
 ## Update
 
@@ -143,7 +162,10 @@ It does not change your branch, commits, staging area, or stash.
 - Windows, macOS, or Linux
 - Claude Code or Codex for automatic stories
 
-JavaScript and TypeScript code maps are supported for now.
+Every readable source project gets a file and name map, even when Twomind has
+never seen its file extension before. Java, JavaScript, TypeScript, Python, C#,
+Go, Rust, PHP, C, C++, Kotlin, Swift, Dart, and shell files also get function
+flows.
 
 ## License
 

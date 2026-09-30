@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { parse, type ParserPlugin } from '@babel/parser';
 import type * as t from '@babel/types';
+import { GENERIC_FLOW_EXTENSIONS, readGenericFlowFacts } from './generic.js';
 import type { ArmRef, BranchKind, CalleeRef, FlowArm, FlowBranch, FlowFunction, FunctionKind } from './types.js';
 
 /**
@@ -12,7 +13,8 @@ import type { ArmRef, BranchKind, CalleeRef, FlowArm, FlowBranch, FlowFunction, 
  * the others. resolve.ts connects the files.
  */
 
-export const FLOW_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
+const BABEL_FLOW_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
+export const FLOW_EXTENSIONS = new Set([...BABEL_FLOW_EXTENSIONS, ...GENERIC_FLOW_EXTENSIONS]);
 
 /** A name brought in from another file. */
 export interface ImportRef {
@@ -110,6 +112,9 @@ const SKIP_KEYS = new Set([
 ]);
 
 export function readFlowFacts(file: string, text: string): FileFacts {
+  if (GENERIC_FLOW_EXTENSIONS.has(path.extname(file).toLowerCase())) {
+    return readGenericFlowFacts(file, text);
+  }
   return new Extractor(file, text).run();
 }
 
